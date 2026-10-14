@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FontForge Studio — Custom TTF Creator</title>
+<style>
+:root{
+  --bg-1:#04120f;
+  --bg-2:#062019;
+  --bg-3:#08281f;
+  --panel:#0a2a22;
+  --panel-2:#0d3428;
+  --border:#155c46;
+  --border-soft:#0f3f30;
+  --accent-green:#0a5c3f;
+  --accent-aqua:#00c9a7;
+  --accent-aqua-2:#00e6c3;
+  --accent-blue:#1f7ae0;
+  --accent-blue-2:#3fa9ff;
+  --text-hi:#eafff7;
+  --text-mid:#8fcdb9;
+  --text-dim:#4f8c76;
+  --danger:#ff5c5c;
+  --warn:#ffb84d;
+  --ok:#39e59a;
+  --shadow-glow:0 0 24px rgba(0,201,167,.18);
+  --radius:10px;
+  --mono:'Consolas','SF Mono','Cascadia Code','Fira Code',monospace;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0;padding:0;height:100%;
+  font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+  background:
+    radial-gradient(1200px 700px at 8% -10%, rgba(0,201,167,.10), transparent 60%),
+    radial-gradient(1000px 800px at 100% 0%, rgba(31,122,224,.12), transparent 55%),
+    linear-gradient(160deg,var(--bg-1) 0%, var(--bg-2) 45%, var(--bg-3) 100%);
+  color:var(--text-hi);
+  overflow:hidden;
+}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:var(--bg-2);}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--accent-green),var(--accent-aqua));border-radius:6px;}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(var(--accent-aqua),var(--accent-blue));}
+
+#app{display:grid;grid-template-rows:auto 1fr auto;height:100vh;}
+
+/* ===== TOPBAR ===== */
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 18px;
+  background:linear-gradient(90deg,var(--bg-2),var(--panel) 40%,var(--panel-2) 100%);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 2px 18px rgba(0,0,0,.35);
+  z-index:10;
+}
+#brand{display:flex;align-items:center;gap:12px;}
+#brand .logo{
+  width:34px;height:34px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent-green),var(--accent-aqua) 55%, var(--accent-blue) 120%);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;color:#01140f;font-size:16px;
+  box-shadow:var(--shadow-glow);
+}
+#brand h1{font-size:15px;letter-spacing:.5px;margin:0;font-weight:700;
+  background:linear-gradient(90deg,var(--accent-aqua-2),var(--accent-blue-2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;}
+#brand .sub{font-size:10.5px;color:var(--text-dim);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;}
+
+#font-meta{display:flex;gap:10px;align-items:center;}
+.meta-field{display:flex;flex-direction:column;gap:2px;}
+.meta-field label{font-size:9.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+.meta-field input{
+  background:var(--bg-1);border:1px solid var(--border-soft);color:var(--text-hi);
+  border-radius:6px;padding:6px 9px;font-size:12.5px;width:150px;
+  font-family:var(--mono);
+}
+.meta-field input:focus{outline:none;border-color:var(--accent-aqua);box-shadow:0 0 0 2px rgba(0,201,167,.15);}
+.meta-field select{
+  background:var(--bg-1);border:1px solid var(--border-soft);color:var(--text-hi);
+  border-radius:6px;padding:6px 9px;font-size:12.5px;
+  font-family:var(--mono);cursor:pointer;
+}
+.meta-field select:focus{outline:none;border-color:var(--accent-aqua);box-shadow:0 0 0 2px rgba(0,201,167,.15);}
+
+#topbar-actions{display:flex;gap:8px;}
+.btn{
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,var(--panel-2),var(--panel));
+  color:var(--text-hi);padding:8px 14px;border-radius:8px;
+  font-size:12.5px;font-weight:600;cursor:pointer;letter-spacing:.3px;
+  display:flex;align-items:center;gap:6px;transition:.15s;
+}
+.btn:hover{border-color:var(--accent-aqua);box-shadow:0 0 14px rgba(0,201,167,.25);transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{
+  background:linear-gradient(120deg,var(--accent-green),var(--accent-aqua) 70%);
+  color:#01140f;border:none;font-weight:800;
+}
+.btn-primary:hover{box-shadow:0 0 20px rgba(0,230,195,.5);}
+.btn-blue{background:linear-gradient(120deg,#0e3a66,var(--accent-blue));color:#eaf4ff;border:none;font-weight:700;}
+.btn-danger{background:linear-gradient(120deg,#4a1414,#7a1f1f);border-color:#7a1f1f;color:#ffdede;}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none;}
+
+/* ===== MAIN LAYOUT ===== */
+#main{display:grid;grid-template-columns:280px 1fr 300px;gap:0;overflow:hidden;}
+
+/* ===== SIDEBAR SINISTRA: GLYPH LIST ===== */
+#glyph-panel{
+  background:linear-gradient(180deg,var(--panel),var(--bg-2));
+  border-right:1px solid var(--border-soft);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.panel-head{
+  padding:12px 14px 8px;border-bottom:1px solid var(--border-soft);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-head h2{font-size:11.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-aqua-2);margin:0;font-weight:700;}
+.progress-badge{
+  font-size:10.5px;font-family:var(--mono);color:var(--text-mid);
+  background:var(--bg-1);padding:2px 8px;border-radius:20px;border:1px solid var(--border-soft);
+}
+#glyph-search{
+  margin:10px 12px 6px;padding:7px 10px;background:var(--bg-1);
+  border:1px solid var(--border-soft);border-radius:7px;color:var(--text-hi);font-size:12px;
+}
+#glyph-groups{flex:1;overflow-y:auto;padding:6px 10px 14px;}
+.glyph-group-title{
+  font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);
+  margin:12px 4px 6px;
+}
+.glyph-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;}
+.glyph-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  background:var(--bg-1);border:1px solid var(--border-soft);border-radius:6px;
+  cursor:pointer;font-size:14px;color:var(--text-mid);position:relative;
+  transition:.12s;user-select:none;
+}
+.glyph-cell:hover{border-color:var(--accent-blue-2);color:var(--text-hi);}
+.glyph-cell.active{
+  background:linear-gradient(135deg,var(--accent-green),rgba(0,201,167,.35));
+  border-color:var(--accent-aqua);color:#fff;box-shadow:0 0 10px rgba(0,201,167,.35);
+}
+.glyph-cell.done::after{
+  content:'';position:absolute;bottom:2px;right:2px;width:6px;height:6px;border-radius:50%;
+  background:var(--ok);box-shadow:0 0 4px var(--ok);
+}
+
+/* ===== CENTRO: CANVAS DI DISEGNO ===== */
+#canvas-panel{
+  display:flex;flex-direction:column;align-items:center;
+  overflow:hidden;position:relative;
+  background:
+    radial-gradient(700px 500px at 50% 30%, rgba(0,201,167,.05), transparent 70%);
+}
+#canvas-toolbar{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  border-bottom:1px solid var(--border-soft);width:100%;justify-content:center;
+  background:rgba(6,32,25,.5);backdrop-filter:blur(6px);
+}
+.tool-btn{
+  width:34px;height:34px;border-radius:8px;background:var(--bg-1);
+  border:1px solid var(--border-soft);color:var(--text-mid);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:15px;transition:.12s;
+}
+.tool-btn:hover{color:var(--text-hi);border-color:var(--accent-aqua);}
+.tool-btn.active{background:linear-gradient(135deg,var(--accent-green),var(--accent-aqua));color:#012;border:none;}
+.toolbar-sep{width:1px;height:22px;background:var(--border-soft);}
+
+#current-glyph-label{
+  display:flex;align-items:center;gap:10px;padding:10px 0 4px;
+}
+#current-glyph-big{
+  font-size:34px;font-weight:700;color:var(--accent-aqua-2);
+  text-shadow:0 0 18px rgba(0,201,167,.4);font-family:var(--mono);
+}
+#current-glyph-name{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+
+#canvas-wrap{
+  position:relative;flex:1;display:flex;align-items:center;justify-content:center;
+  width:100%;padding:10px;
+}
+#drawCanvas{
+  background:#ffffff;
+  border-radius:6px;
+  box-shadow:0 0 0 1px var(--border), 0 0 40px rgba(0,201,167,.15), 0 20px 50px rgba(0,0,0,.5);
+  cursor:crosshair;
+  touch-action:none;
+}
+#guides-overlay{position:absolute;pointer-events:none;}
+
+#canvas-footer{
+  display:flex;gap:10px;padding:10px 16px 16px;align-items:center;
+}
+
+/* ===== SIDEBAR DESTRA: BRUSH SETTINGS ===== */
+#settings-panel{
+  background:linear-gradient(180deg,var(--panel),var(--bg-2));
+  border-left:1px solid var(--border-soft);
+  overflow-y:auto;padding:14px 16px 30px;
+}
+.settings-section{margin-bottom:20px;}
+.settings-section h3{
+  font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-blue-2);
+  margin:0 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border-soft);
+  display:flex;align-items:center;gap:6px;
+}
+.slider-row{margin-bottom:14px;}
+.slider-row .slabel{
+  display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-mid);margin-bottom:5px;
+}
+.slider-row .slabel .val{
+  font-family:var(--mono);color:var(--accent-aqua-2);font-weight:700;background:var(--bg-1);
+  padding:1px 7px;border-radius:4px;border:1px solid var(--border-soft);min-width:38px;text-align:center;
+}
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:5px;border-radius:4px;
+  background:linear-gradient(90deg,var(--accent-green),var(--accent-aqua),var(--accent-blue));
+  cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#fff,var(--accent-aqua) 60%,var(--accent-blue));
+  border:2px solid #04120f;box-shadow:0 0 8px rgba(0,201,167,.6);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#fff,var(--accent-aqua) 60%,var(--accent-blue));
+  border:2px solid #04120f;box-shadow:0 0 8px rgba(0,201,167,.6);cursor:pointer;
+}
+.color-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.color-row input[type=color]{
+  width:40px;height:30px;border:1px solid var(--border-soft);border-radius:6px;background:none;cursor:pointer;padding:0;
+}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.toggle-row span{font-size:11.5px;color:var(--text-mid);}
+.switch{position:relative;width:38px;height:20px;}
+.switch input{opacity:0;width:0;height:0;}
+.switch .slider-tog{
+  position:absolute;inset:0;background:var(--bg-1);border:1px solid var(--border-soft);
+  border-radius:20px;transition:.2s;cursor:pointer;
+}
+.switch .slider-tog::before{
+  content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;border-radius:50%;
+  background:var(--text-dim);transition:.2s;
+}
+.switch input:checked + .slider-tog{background:linear-gradient(90deg,var(--accent-green),var(--accent-aqua));border-color:var(--accent-aqua);}
+.switch input:checked + .slider-tog::before{transform:translateX(18px);background:#fff;}
+
+.preset-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+.preset-btn{
+  flex:1;min-width:70px;padding:7px 4px;font-size:10.5px;text-align:center;
+  background:var(--bg-1);border:1px solid var(--border-soft);border-radius:6px;
+  color:var(--text-mid);cursor:pointer;transition:.12s;
+}
+.preset-btn:hover{border-color:var(--accent-aqua);color:var(--text-hi);}
+.preset-btn.active{background:linear-gradient(135deg,var(--accent-green),var(--accent-aqua));color:#012;border:none;font-weight:700;}
+
+/* ===== FOOTER / STATUS BAR ===== */
+#statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:7px 18px;background:var(--bg-2);border-top:1px solid var(--border-soft);
+  font-size:11px;color:var(--text-dim);font-family:var(--mono);
+}
+#statusbar .left,#statusbar .right{display:flex;gap:16px;align-items:center;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);display:inline-block;margin-right:5px;}
+
+/* ===== PREVIEW MODAL ===== */
+#previewModal{
+  position:fixed;inset:0;background:rgba(2,10,8,.85);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:100;
+}
+#previewModal.show{display:flex;}
+#previewBox{
+  background:linear-gradient(160deg,var(--panel),var(--bg-2));
+  border:1px solid var(--border);border-radius:14px;
+  width:min(880px,92vw);max-height:86vh;overflow:auto;
+  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 60px rgba(0,201,167,.12);
+}
+#previewBox .phead{
+  padding:16px 22px;border-bottom:1px solid var(--border-soft);
+  display:flex;justify-content:space-between;align-items:center;
+}
+#previewBox .phead h2{margin:0;font-size:15px;color:var(--accent-aqua-2);}
+#previewBody{padding:22px;}
+#previewText{
+  width:100%;background:var(--bg-1);border:1px solid var(--border-soft);color:var(--text-hi);
+  border-radius:8px;padding:10px;font-size:13px;margin-bottom:16px;font-family:var(--mono);
+}
+#previewRender{
+  background:#fff;border-radius:8px;padding:24px;min-height:120px;color:#000;
+  font-size:38px;line-height:1.5;word-wrap:break-word;
+}
+.close-x{cursor:pointer;color:var(--text-dim);font-size:20px;background:none;border:none;}
+.close-x:hover{color:var(--danger);}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:50px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:linear-gradient(120deg,var(--accent-green),var(--accent-aqua));
+  color:#012;padding:11px 22px;border-radius:8px;font-weight:700;font-size:13px;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:.3s;z-index:200;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.err{background:linear-gradient(120deg,#7a1f1f,#ff5c5c);color:#fff;}
+
+.icon{width:16px;height:16px;display:inline-block;}
+kbd{background:var(--bg-1);border:1px solid var(--border-soft);border-radius:4px;padding:1px 5px;font-size:10px;color:var(--text-mid);}
+small.hint{display:block;color:var(--text-dim);font-size:10px;margin-top:4px;line-height:1.4;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div id="brand">
+      <div class="logo">Fx</div>
+      <div>
+        <h1>FontForge Studio</h1>
+        <div class="sub">Custom TTF Creator · Offline</div>
+      </div>
+    </div>
+
+    <div id="font-meta">
+      <div class="meta-field">
+        <label>Nome Font</label>
+        <input type="text" id="fontName" value="MioFontCustom" maxlength="40">
+      </div>
+      <div class="meta-field">
+        <label>Nome File</label>
+        <input type="text" id="fileName" value="miofont" maxlength="40">
+      </div>
+      <div class="meta-field">
+        <label>Autore</label>
+        <input type="text" id="fontAuthor" value="Font Maker" maxlength="40">
+      </div>
+      <div class="meta-field">
+        <label>Formato export</label>
+        <select id="exportFormat">
+          <option value="otf" selected>.OTF (consigliato)</option>
+          <option value="ttf">.TTF</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="topbar-actions">
+      <button class="btn btn-sm" id="btnNewProject" title="Inizia un nuovo font da zero">🆕 Nuovo progetto</button>
+      <button class="btn btn-sm" id="btnImportProject">📂 Carica progetto</button>
+      <button class="btn btn-sm" id="btnExportProject">💾 Salva progetto</button>
+      <button class="btn btn-blue btn-sm" id="btnPreview">👁 Anteprima</button>
+      <button class="btn btn-primary" id="btnExportTTF" title="Invia il font a BlaBla: subito utilizzabile nel documento aperto">💾 Salva in BlaBla (.OTF)</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- GLYPH LIST -->
+    <div id="glyph-panel">
+      <div class="panel-head">
+        <h2>Caratteri</h2>
+        <span class="progress-badge" id="progressBadge">0 / 0</span>
+      </div>
+      <input type="text" id="glyph-search" placeholder="Cerca carattere...">
+      <div id="glyph-groups"></div>
+    </div>
+
+    <!-- CANVAS CENTRALE -->
+    <div id="canvas-panel">
+      <div id="canvas-toolbar">
+        <button class="tool-btn active" id="toolDraw" title="Disegna (P)">✏️</button>
+        <button class="tool-btn" id="toolErase" title="Gomma (E)">🧽</button>
+        <button class="tool-btn" id="toolLine" title="Linea retta (L)">📏</button>
+        <div class="toolbar-sep"></div>
+        <button class="tool-btn" id="btnUndo" title="Annulla (Ctrl+Z)">↩</button>
+        <button class="tool-btn" id="btnRedo" title="Ripristina (Ctrl+Y)">↪</button>
+        <button class="tool-btn" id="btnClear" title="Pulisci tutto">🗑</button>
+        <div class="toolbar-sep"></div>
+        <button class="tool-btn" id="btnGrid" title="Mostra griglia">▦</button>
+        <button class="tool-btn" id="btnMirror" title="Mostra fantasma glifo precedente">👻</button>
+        <div class="toolbar-sep"></div>
+        <button class="tool-btn" id="btnPrevGlyph" title="Carattere precedente">◀</button>
+        <button class="tool-btn" id="btnNextGlyph" title="Carattere successivo">▶</button>
+      </div>
+
+      <div id="current-glyph-label">
+        <div id="current-glyph-big">A</div>
+        <div id="current-glyph-name">MAIUSCOLA · LATIN CAPITAL LETTER A</div>
+      </div>
+
+      <div id="canvas-wrap">
+        <canvas id="drawCanvas" width="600" height="600"></canvas>
+      </div>
+
+      <div id="canvas-footer">
+        <button class="btn btn-sm" id="btnMarkDone">✔ Segna completato</button>
+        <button class="btn btn-sm btn-danger" id="btnDeleteCurrentGlyph" title="Cancella tutti i tratti del carattere aperto (Ctrl+Canc)">
+          🗑 Cancella lettera corrente
+        </button>
+        <small style="color:var(--text-dim);margin-left:auto;">
+          <kbd>P</kbd> penna · <kbd>E</kbd> gomma · <kbd>L</kbd> linea · <kbd>Ctrl+Z</kbd> annulla · <kbd>Tab</kbd> prossimo · <kbd>Ctrl+Canc</kbd> cancella lettera
+        </small>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="settings-panel">
+
+      <div class="settings-section">
+        <h3>🖌 Pennello</h3>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Dimensione penna</span><span class="val" id="valBrushSize">8</span></div>
+          <input type="range" id="brushSize" min="1" max="60" value="8">
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Rumore tratto</span><span class="val" id="valNoise">0</span></div>
+          <input type="range" id="brushNoise" min="0" max="100" value="0">
+          <small class="hint">0 = tratto omogeneo e pulito · 100 = tratto scattoso, irregolare, "a mano libera nervosa"</small>
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Scala frequenza rumore</span><span class="val" id="valNoiseFreq">4</span></div>
+          <input type="range" id="brushNoiseFreq" min="1" max="20" value="4">
+          <small class="hint">Distanza tra le "scattature" del rumore lungo il tratto</small>
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Pressione / Assottigliamento</span><span class="val" id="valPressure">30</span></div>
+          <input type="range" id="brushPressure" min="0" max="100" value="30">
+          <small class="hint">Simula variazione di spessore in base alla velocità del tratto</small>
+        </div>
+
+        <div class="color-row">
+          <input type="color" id="brushColor" value="#000000">
+          <span style="font-size:11.5px;color:var(--text-mid);">Colore inchiostro (solo anteprima)</span>
+        </div>
+
+        <div class="preset-row">
+          <div class="preset-btn active" data-preset="pen">Penna</div>
+          <div class="preset-btn" data-preset="brush">Pennello</div>
+          <div class="preset-btn" data-preset="marker">Pennarello</div>
+          <div class="preset-btn" data-preset="pencil">Matita</div>
+          <div class="preset-btn" data-preset="calligraphy">Calligrafia</div>
+          <div class="preset-btn" data-preset="sketchy">Schizzo</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>📐 Metriche Font</h3>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Em Size (unità/em)</span><span class="val" id="valUPM">1000</span></div>
+          <input type="range" id="unitsPerEm" min="500" max="2000" step="100" value="1000">
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Ascender</span><span class="val" id="valAscender">800</span></div>
+          <input type="range" id="ascender" min="400" max="1200" value="800">
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Descender</span><span class="val" id="valDescender">-200</span></div>
+          <input type="range" id="descender" min="-600" max="0" value="-200">
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Larghezza avanzamento (advance)</span><span class="val" id="valAdvance">650</span></div>
+          <input type="range" id="advanceWidth" min="300" max="1400" value="650">
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Margine sinistro glifo</span><span class="val" id="valMarginL">40</span></div>
+          <input type="range" id="marginLeft" min="-100" max="300" value="40">
+          <small class="hint">Sul canvas: linea viola = origine glifo (x=0) · linea rossa = bordo destro dell'advance width. Disegna dentro queste due linee per evitare sovrapposizioni tra lettere nel testo composto.</small>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>🧬 Vettorializzazione</h3>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Livello dettaglio traccia</span><span class="val" id="valTraceDetail">6</span></div>
+          <input type="range" id="traceDetail" min="1" max="15" value="6">
+          <small class="hint">Punti di controllo curva per segmento: più alto = più fedele ma file più pesante</small>
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Smoothing curve</span><span class="val" id="valSmoothing">50</span></div>
+          <input type="range" id="smoothing" min="0" max="100" value="50">
+          <small class="hint">Arrotonda gli angoli del tratto trasformandolo in curve Bézier morbide</small>
+        </div>
+
+        <div class="slider-row">
+          <div class="slabel"><span>Soglia semplificazione punti</span><span class="val" id="valSimplify">2</span></div>
+          <input type="range" id="simplify" min="0" max="10" step="0.5" value="2">
+          <small class="hint">Rimuove punti ridondanti lungo il tratto prima di generare i contorni</small>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div id="statusbar">
+    <div class="left">
+      <span><span class="dot"></span>Editor pronto</span>
+      <span id="statusStrokes">Tratti: 0</span>
+      <span id="statusGlyph">Glifo: A</span>
+    </div>
+    <div class="right">
+      <span id="statusUPM">UPM: 1000</span>
+      <span>FontForge Studio v1.0</span>
+    </div>
+  </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div id="previewModal">
+  <div id="previewBox">
+    <div class="phead">
+      <h2>Anteprima Font</h2>
+      <button class="close-x" id="btnClosePreview">✕</button>
+    </div>
+    <div id="previewBody">
+      <input type="text" id="previewText" value="Abcdefg 0123456789 Il rapido gatto salta!" placeholder="Scrivi qualcosa per testare il font...">
+      <div class="slider-row">
+        <div class="slabel"><span>Dimensione testo</span><span class="val" id="valPreviewSize">38</span></div>
+        <input type="range" id="previewSize" min="14" max="120" value="38">
+      </div>
+      <div id="previewRender"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="opentype.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

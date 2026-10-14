@@ -1,0 +1,7 @@
+* text=auto
+*.ttf binary
+*.TTF binary
+*.otf binary
+*.gz binary
+*.wasm.js -diff
+*.min.js -diff

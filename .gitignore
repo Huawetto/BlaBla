@@ -1,0 +1,25 @@
+# Risultati di build
+dist/
+build/
+tools/_build/
+*.spec
+__pycache__/
+*.pyc
+
+# Dati utente e file locali dell'ambiente di lavoro
+.claude/
+document.json
+custom_fonts/
+
+# Output dei test e file temporanei
+tests/e2e/out/
+tests/e2e/evil.*
+*.tmp
+*.log
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# Font proprietari: MAI nel repository (vedi THIRD_PARTY_NOTICES.md)
+fonts/_retired_backup/

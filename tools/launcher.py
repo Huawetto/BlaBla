@@ -53,7 +53,7 @@ if sys.stderr is None:
 APP_NAME = "BlaBla"
 # incrementa quando cambia il contenuto bundlato nell'exe: forza un
 # riallineamento della copia stabile alla nuova versione al prossimo avvio
-VERSION = "20"
+VERSION = "21"
 
 VALID_FONT_EXT = {".ttf", ".otf", ".woff", ".woff2", ".ttc"}
 

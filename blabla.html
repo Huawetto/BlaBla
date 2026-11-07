@@ -1254,6 +1254,8 @@ const Pages = {
       cade solo dove nessuna cella unita in verticale (rowspan) lo attraversa. */
   _splitTableForFit(table,cur,next){
     const tb=table.tBodies[0]; if(!tb) return false;
+    // più <tbody> (tabelle incollate da Word/web): le righe si riuniscono nel primo, così si dividono tutte
+    Array.from(table.tBodies).slice(1).forEach(b=>{ Array.from(b.rows).forEach(r=>tb.appendChild(r)); b.remove(); });
     const rows=Array.from(tb.rows); if(rows.length<2) return false;
     const safe=new Array(rows.length+1).fill(false); let reach=0;
     rows.forEach((tr,ri)=>{ safe[ri]=ri>0 && reach<=ri; Array.from(tr.cells).forEach(c=>{ reach=Math.max(reach,ri+(c.rowSpan||1)); }); });
@@ -1267,6 +1269,7 @@ const Pages = {
     const cont=table.cloneNode(false); cont.removeAttribute('data-bb-pgstart'); cont.style.marginTop='0';
     const cg=table.querySelector('colgroup'); if(cg) cont.appendChild(cg.cloneNode(true));
     const tb2=document.createElement('tbody'); rows.slice(k).forEach(r=>tb2.appendChild(r)); cont.appendChild(tb2);
+    if(table.tFoot) cont.appendChild(table.tFoot);     // il piè di tabella va in coda all'ULTIMA parte
     next.content.insertBefore(cont, next.content.firstElementChild||null);
     return true;
   },
@@ -1328,6 +1331,11 @@ const Pages = {
     const sel=window.getSelection();
     const cursor=sel.rangeCount?sel.getRangeAt(0).commonAncestorContainer:null;
     const touches=(node)=> !!(node && cursor && (node===cursor || (node.contains&&node.contains(cursor))));
+    // Una tabella che sfora il foglio va divisa/spostata SUBITO anche se il cursore è dentro: le righe
+    // oltre il bordo sono tagliate e invisibili, e aspettare ("non si sposta il blocco col cursore")
+    // lasciava mezza riga fuori dalla pagina. Il cursore si rimette dov'era (stesso nodo) a fine reflow.
+    const keep=sel.rangeCount?{an:sel.anchorNode,ao:sel.anchorOffset}:null;
+    let caretMoved=false;
     // le immagini estratte da PDF/OCR (o trascinate liberamente) sono
     // position:absolute con coordinate fisse ANCORATE alla loro pagina
     // d'origine: il reflow non deve mai spostarle, o finirebbero a
@@ -1387,11 +1395,13 @@ const Pages = {
             }
           }
         }
-        if(last && last.tagName==='TABLE' && (!blockedByCursor||forceMove) && last.offsetHeight>0.3*cur.clientHeight){
+        if(last && last.tagName==='TABLE' && last.offsetHeight>0.3*cur.clientHeight){
           const nx=this._nextFor(i);
-          if(this._splitTableForFit(last,cur,nx)){ this._stuckPage=null; changed=true; continue; }
+          const had=touches(last);
+          if(this._splitTableForFit(last,cur,nx)){ if(had) caretMoved=true; this._stuckPage=null; changed=true; continue; }
         }
-        if(last && flowCount>1 && (!blockedByCursor||forceMove)){
+        if(last && flowCount>1 && (!blockedByCursor||forceMove||last.tagName==='TABLE')){
+          if(blockedByCursor && last.tagName==='TABLE') caretMoved=true;
           const next=this._nextFor(i);
           const ref=firstFlow(next.content)||next.content.firstChild;
           next.content.insertBefore(last,ref);
@@ -1404,9 +1414,10 @@ const Pages = {
         // _splitBlockForFit) invece di lasciarlo tagliato di netto dal bordo
         // della pagina — il caso tipico è un testo incollato arrivato come un
         // unico paragrafo enorme, mai spezzato in elementi separati.
-        if(last && (!blockedByCursor||forceMove) && this._isSplittableBlock(last)){
+        if(last && (!blockedByCursor||forceMove||last.tagName==='TABLE') && this._isSplittableBlock(last)){
           const next=this._nextFor(i);
-          if(this._splitBlockForFit(last,cur,next)){ this._stuckPage=null; changed=true; continue; }
+          const had=blockedByCursor && last.tagName==='TABLE';
+          if(this._splitBlockForFit(last,cur,next)){ if(had) caretMoved=true; this._stuckPage=null; changed=true; continue; }
         }
       } else {
         const next=State.pages[i+1];
@@ -1433,6 +1444,18 @@ const Pages = {
       if(this._hasContent(lastPage.content) || touches(lastPage.content)) break;
       lastPage.el.remove(); State.pages.pop(); changed=true;
       if(State.active>=State.pages.length) State.active=State.pages.length-1;
+    }
+    if(caretMoved && keep && keep.an && keep.an.isConnected){
+      try{
+        const len=keep.an.nodeType===3?keep.an.nodeValue.length:keep.an.childNodes.length;
+        const r=document.createRange(); r.setStart(keep.an,Math.min(keep.ao,len)); r.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r);
+        const pi=State.pages.findIndex(pp=>pp.content.contains(keep.an)); if(pi>=0) State.active=pi;
+        // si scorre SOLO se il cursore è finito fuori dalla vista (uno scroll inutile deseleziona
+        // l'immagine selezionata e sposta la pagina sotto le dita)
+        const el=keep.an.nodeType===1?keep.an:keep.an.parentElement, area=document.getElementById('bb-editor-area');
+        if(el&&area){ const er=el.getBoundingClientRect(), ar=area.getBoundingClientRect(); if(er.bottom>ar.bottom||er.top<ar.top) el.scrollIntoView({block:'nearest'}); }
+      }catch(e){}
     }
     if(changed) this.renumber();
     // se è rimasta una pagina "bloccata" dal cursore (vedi sopra) e non ha
@@ -1927,7 +1950,7 @@ const Tables = {
     this.selectedCell=null; this.hideToolbar(); this._after();
   },
   delTable(){ if(!this.selectedTable) return; this.selectedTable.remove(); this.selectedTable=null; this.selectedCell=null; this.hideToolbar(); this._after(); },
-  _after(){ Autosave.mark(); Stats.update(); History.snapshot(); }
+  _after(){ Autosave.mark(); Stats.update(); History.snapshot(); Pages.reflow(); scheduleReflow(); }
 };
 
 /* ======================= CONTENUTO NON PIÙ SUPPORTATO ======================= */

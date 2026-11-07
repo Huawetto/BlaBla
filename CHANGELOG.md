@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-11-07
+- **Tabelle**: le righe che arrivano a fine pagina vanno a capo sulla pagina successiva (prima restavano a metà o
+  oltre il foglio, soprattutto aggiungendo righe a mano o scrivendo nelle celle). Funziona anche con `thead`,
+  più `tbody` e `tfoot`.
+
 ## 1.0.0 — 2026-10-14
 Prima versione pubblica.
 

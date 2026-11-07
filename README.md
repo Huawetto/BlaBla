@@ -44,6 +44,7 @@ pip install -r requirements-dev.txt        (solo per i test)
 python -m http.server 8743                 (in un terminale, nella cartella del progetto)
 python tests/e2e/audit.py                  (feature principali)
 python tests/e2e/audit3.py                 (conferme, annulla/ripeti, esportazione con tema scuro)
+python tests/e2e/tables.py                 (righe di tabella mai oltre il bordo pagina)
 python tests/e2e/xss.py                    (file ostili)
 
 pip install -r requirements-build.txt      (solo per creare l'exe)

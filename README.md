@@ -1,12 +1,30 @@
 # BlaBla — Editor Documenti
 
 Editor di documenti **offline-first**, in **HTML/CSS/JavaScript vanilla** (nessun
-framework, nessun build step). Interfaccia in italiano stile suite per ufficio:
-ribbon con icone vettoriali, pagine A4 multi-pagina con reflow automatico,
-salvataggio automatico, "Salva come" in **.blab** (formato nativo) o **PDF**,
-import da DOCX/DOC/RTF/PDF/TXT, **OCR** di PDF scansionati.
+framework, nessun build step). Interfaccia in **italiano e inglese** stile suite per ufficio:
+ribbon con icone vettoriali, pagine A4 multi-pagina con reflow automatico, salvataggio automatico,
+"Salva come" in **.blab** (formato nativo), **PDF con testo vero** o **DOCX**, import da DOCX/DOC/RTF/PDF/TXT,
+**OCR** di PDF scansionati con correzione assistita.
 
-## Avvio
+![BlaBla in azione](docs/demo.gif)
+
+| | |
+|---|---|
+| ![Relazione con sommario](docs/03-relazione.png) | ![Interfaccia in inglese](docs/04-english.png) |
+| ![Galleria modelli](docs/02-modelli.png) | ![PDF con originale accanto](docs/05-confronto-pdf.png) |
+
+## Installazione (Windows)
+Scarica dalla pagina [Releases](https://github.com/Huawetto/BlaBla/releases) uno tra:
+- **`BlaBla-Setup-<versione>.exe`** — installatore per utente (non servono i permessi di amministratore):
+  crea i collegamenti, si disinstalla da «App installate». Silenzioso: `BlaBla-Setup.exe /S` (opzioni
+  `/NODESKTOP`, `/D=C:\Cartella`).
+- **`BlaBla-<versione>-portable.zip`** — si scompatta ovunque, si avvia `BlaBla.exe`.
+
+`SHA256SUMS.txt` contiene le impronte per verificare i file. Windows SmartScreen può mostrare «Editore sconosciuto»
+finché gli eseguibili non sono firmati: vedi [docs/SIGNING.md](docs/SIGNING.md). L'app controlla una volta al giorno se
+c'è una versione nuova (solo un avviso, niente si scarica da solo; si spegne da **Aggiornamenti**).
+
+## Avvio dal browser
 Fai **doppio clic su `blabla.html`**. Si apre nel browser e funziona anche
 offline (`file://`). Nessuna installazione.
 
@@ -29,7 +47,14 @@ tools/
   fetch-new-fonts.py       Scarica in blocco altre famiglie da Google Fonts (licenza
                            OFL), saltando quelle già presenti.
   launcher.py              Punto d'ingresso dell'app desktop (vedi sotto).
-  build_exe.py/.bat        Crea dist/BlaBla.exe (vedi sotto).
+  build_exe.py/.bat        Crea programma, installatore e zip portatile (vedi sotto).
+  installer.py             Installatore (tkinter) incluso in BlaBla-Setup.exe.
+  uninstaller.py           "Uninstall BlaBla.exe" (solo ctypes).
+  make_screenshots.py      Rigenera gli screenshot e la GIF in docs/.
+modules/                   Funzioni aggiunte sopra l'API pubblica `window.BB`: intestazioni/piè di pagina,
+                           sommario e note, esportazione DOCX, cronologia versioni, stili e modelli, lingua,
+                           immagini, revisione PDF, aggiornamenti, interfaccia inglese.
+docs/                      Screenshot, GIF e guida alla firma digitale.
 engine/pdfengine.js        Motore di analisi layout dei PDF (tabelle, colonne, figure, OCR).
 vendor/                    Librerie di terze parti, TUTTE locali (nessun CDN; vedi vendor/README.txt
                            e THIRD_PARTY_NOTICES.md).
@@ -46,13 +71,26 @@ python tests/e2e/audit.py                  (feature principali)
 python tests/e2e/audit3.py                 (conferme, annulla/ripeti, esportazione con tema scuro)
 python tests/e2e/tables.py                 (righe di tabella mai oltre il bordo pagina)
 python tests/e2e/xss.py                    (file ostili)
+python tests/e2e/crosspage.py              (selezione col mouse e Ctrl+A tra più pagine)
+python tests/e2e/docx_export.py            (esportazione DOCX, riletta anche con l'import)
+python tests/e2e/notes.py                  (sommario e note a piè di pagina)
+python tests/e2e/versions.py               (cronologia versioni)
+python tests/e2e/features2.py              (intestazioni, stili, modelli, lingua)
+python tests/e2e/images.py                 (disposizione, didascalie, ritaglio)
+python tests/e2e/pdf_review.py             (confronto PDF, parole dubbie dell'OCR, più PDF insieme)
+python tests/e2e/i18n.py                   (interfaccia inglese senza testi italiani residui)
+python tests/e2e/update.py                 (controllo aggiornamenti, con GitHub simulato)
 
 pip install -r requirements-build.txt      (solo per creare l'exe)
-python tools/build_exe.py                  -> dist/BlaBla.exe
+python tools/build_exe.py                  -> dist/BlaBla/ (programma), BlaBla-Setup-<ver>.exe,
+                                              BlaBla-<ver>-portable.zip, SHA256SUMS.txt
+python tools/make_screenshots.py           (rigenera docs/*.png e docs/demo.gif)
 ```
-**Pubblicare su GitHub:** il repository contiene il sorgente (circa 60 MB tra `vendor/` e `fonts/`);
-`dist/BlaBla.exe` (~160 MB) NON va nel repository (limite di 100 MB per file) ma come file allegato di una
-**Release**. L'exe non è firmato digitalmente: Windows SmartScreen può mostrare l'avviso "editore sconosciuto".
+**Pubblicare su GitHub:** il repository contiene il sorgente (circa 60 MB tra `vendor/` e `fonts/`); gli
+eseguibili (`dist/`) NON vanno nel repository ma come file allegati di una **Release**. Pubblicando un tag
+`vX.Y.Z` il workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) costruisce e allega
+installatore, zip portatile e impronte (e, se configurato, firma con SignPath: vedi [docs/SIGNING.md](docs/SIGNING.md)).
+La versione dell'app sta in un solo posto: [`modules/version.js`](modules/version.js).
 
 ## Licenza
 MIT (vedi `LICENSE`). Componenti e font di terze parti: `THIRD_PARTY_NOTICES.md`.
@@ -63,14 +101,15 @@ in una **vera finestra desktop nativa** — niente barra degli indirizzi, niente
 schede, nessuna interfaccia da browser — e che **non richiede Python, altre
 installazioni né connessione a internet** sul PC di destinazione.
 
-**Per creare l'eseguibile** (serve Python e internet solo per questo passaggio,
+**Per creare i pacchetti** (serve Python e internet solo per questo passaggio,
 una tantum): doppio clic su [`tools/build_exe.bat`](tools/build_exe.bat), oppure
 ```
 python tools/build_exe.py               (bundla anche i modelli OCR offline, più lento)
 python tools/build_exe.py --skip-ocr-data  (più veloce; l'OCR scarica i modelli alla prima esecuzione)
 ```
-Il risultato è `dist/BlaBla.exe`: copialo su qualunque PC Windows e avvialo con
-un doppio clic, anche senza internet.
+Il programma è una **cartella** (`dist/BlaBla/`), non un unico file: parte in 2-3 secondi perché non deve
+scompattare ogni volta qualche centinaio di MB come faceva il vecchio `BlaBla.exe` "tutto in uno". Funziona anche
+senza internet.
 
 **Come funziona:** `tools/launcher.py` (compilato nell'exe da PyInstaller) apre
 la pagina `blabla.html` dentro una finestra [pywebview](https://pywebview.flowrl.com/)
@@ -81,6 +120,10 @@ rete), necessario perché alcune funzioni (anteprima PDF, librerie in `vendor/`,
 modelli lingua dell'OCR) richiedono una vera origine `http://` per funzionare
 in modo affidabile. Se il PC non ha il runtime WebView2 (raro, solo su Windows
 molto datati), l'app ricade automaticamente sul browser predefinito.
+
+**Esportazione PDF:** nell'app desktop il PDF lo crea il motore di stampa di WebView2 (lo stesso di Edge), quindi ha
+testo vero, selezionabile e ricercabile, caratteri incorporati e pesa poco. Nel browser resta la scelta tra la
+finestra di stampa («Salva come PDF») e un PDF-immagine.
 
 Il documento viene salvato automaticamente su un file nella cartella stabile
 dell'app (`%LOCALAPPDATA%\BlaBla`), scritto direttamente da Python — non nel
@@ -128,6 +171,20 @@ non far "saltare" la scrittura da sotto le dita. Risultato: si scrive su più
 pagine come in un elaboratore testi vero, il documento resta sempre impaginato
 correttamente, ed è già pronto per la stampa (ogni pagina video corrisponde a
 un foglio stampato).
+
+## Novità della 1.1
+- **Intestazioni, piè di pagina e numeri di pagina** (con segnaposto Pagina / Totale / Titolo / Data).
+- **Sommario automatico** dai titoli e **note a piè di pagina** (nel DOCX diventano veri sommario e note).
+- **Esportazione DOCX** modificabile (titoli, elenchi, tabelle, immagini con didascalia, intestazioni, note).
+- **Selezione col mouse attraverso più pagine**, anche con Maiusc+clic.
+- **Stili di paragrafo personalizzati** e **modelli di documento** (lettera, relazione, CV, verbale, avviso).
+- **Immagini**: disposizione del testo (a fianco, sopra/sotto, libera), testo alternativo, didascalie numerate, ritaglio.
+- **Cronologia versioni** (automatica ogni 10 minuti e prima di operazioni rischiose) con ripristino.
+- **Lingua del documento e correttore ortografico** a scelta.
+- **PDF**: pannello con la pagina originale accanto al testo, parole dubbie dell'OCR evidenziate (F8 per scorrerle),
+  apertura di più PDF insieme.
+- **Interfaccia in inglese** (pulsante IT/EN nella barra in alto).
+- **Controllo aggiornamenti**, installatore e disinstallatore, avvio rapido.
 
 ## Funzionalità principali
 - **Seleziona tutto (Ctrl+A)** vale per l'INTERO documento: Ctrl+C/Ctrl+X copiano/tagliano tutte le pagine,

@@ -30,7 +30,7 @@ with sync_playwright() as p:
     # dark theme export
     pg.click("#bb-theme-toggle"); time.sleep(.3)
     print("theme:",pg.evaluate("()=>document.documentElement.getAttribute('data-theme')"))
-    pg.click("#bb-saveas"); time.sleep(.4); pg.check('input[name="bb-saveas-fmt"][value="pdf"]')
+    pg.click("#bb-saveas"); time.sleep(.4); pg.check('input[name="bb-saveas-fmt"][value="pdfimg"]')
     with pg.expect_download(timeout=90000) as dl: pg.click("#bb-modal-ok")
     path="out/dark.pdf"; dl.value.save_as(path); d=fitz.open(path); pm=d[0].get_pixmap(dpi=30); import statistics
     print("dark-theme PDF page mean brightness (255=white):",round(statistics.mean(pm.samples[::3]),1))

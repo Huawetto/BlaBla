@@ -134,7 +134,7 @@ with sync_playwright() as p:
         rec("reopen .blab round trip", "Riga 299" in allt and "foresta" in allt, f"pages={len(pg.query_selector_all(pc))}")
     # PDF export
     pg.click("#bb-saveas"); time.sleep(.5)
-    pg.check('input[name="bb-saveas-fmt"][value="pdf"]')
+    pg.check('input[name="bb-saveas-fmt"][value="pdfimg"]')
     try:
         with pg.expect_download(timeout=120000) as dl:
             pg.click("#bb-modal-ok")

@@ -51,9 +51,27 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
 
 APP_NAME = "BlaBla"
-# incrementa quando cambia il contenuto bundlato nell'exe: forza un
-# riallineamento della copia stabile alla nuova versione al prossimo avvio
-VERSION = "21"
+
+
+def _read_build_id():
+    """Identificativo del contenuto bundlato (scritto da build_exe.py in app/build.id): quando cambia, la copia
+    stabile dell'app viene riallineata al prossimo avvio. Eseguendo dal sorgente (senza build.id) cambia ad ogni
+    avvio, cosi' si serve sempre il codice aggiornato."""
+    try:
+        base = os.path.join(sys._MEIPASS, "app") if getattr(sys, "_MEIPASS", None) else None
+        if base is None:
+            here = os.path.dirname(os.path.abspath(__file__))
+            staged = os.path.join(here, "app")
+            base = staged if os.path.isdir(staged) else None
+        if base:
+            with open(os.path.join(base, "build.id"), encoding="utf-8") as f:
+                return f.read().strip()
+    except OSError:
+        pass
+    return "dev-%d" % int(time.time())
+
+
+VERSION = _read_build_id()
 
 VALID_FONT_EXT = {".ttf", ".otf", ".woff", ".woff2", ".ttc"}
 
@@ -78,6 +96,39 @@ def app_dir():
 def stable_install_dir():
     base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     return os.path.join(base, APP_NAME)
+
+
+def _native_print_pdf(win, path, width_mm, height_mm):
+    """Stampa la pagina corrente in `path` con CoreWebView2.PrintToPdfAsync (margini zero, sfondi inclusi,
+    senza intestazione/piè di pagina del browser). Va chiamato da un thread diverso da quello dell'interfaccia."""
+    from System import Func, Object
+    from webview.platforms.winforms import BrowserView
+    wv = BrowserView.instances[win.uid].browser.webview
+    holder = {}
+
+    def start():
+        core = wv.CoreWebView2
+        st = core.Environment.CreatePrintSettings()
+        st.ShouldPrintBackgrounds = True
+        st.ShouldPrintHeaderAndFooter = False
+        st.ScaleFactor = 1.0
+        st.MarginTop = st.MarginBottom = st.MarginLeft = st.MarginRight = 0.0
+        # le dimensioni vanno date "in verticale" e l'orientamento a parte, altrimenti una pagina
+        # orizzontale esce comunque verticale
+        from Microsoft.Web.WebView2.Core import CoreWebView2PrintOrientation
+        landscape = width_mm > height_mm
+        st.PageWidth = min(width_mm, height_mm) / 25.4
+        st.PageHeight = max(width_mm, height_mm) / 25.4
+        st.Orientation = (CoreWebView2PrintOrientation.Landscape if landscape
+                          else CoreWebView2PrintOrientation.Portrait)
+        holder["task"] = core.PrintToPdfAsync(path, st)
+        return None
+
+    wv.Invoke(Func[Object](start))
+    task = holder["task"]
+    if not task.Wait(120000):
+        raise RuntimeError("Tempo scaduto durante la creazione del PDF")
+    return bool(task.Result)
 
 
 class Api:
@@ -107,6 +158,39 @@ class Api:
                 return f.read()
         except OSError:
             return None
+
+    # ------------------------------------------------------------------
+    # ESPORTAZIONE PDF con testo vero: si usa il motore di stampa di WebView2 (lo stesso di Edge),
+    # che produce un PDF vettoriale con i caratteri incorporati, testo selezionabile e ricercabile.
+    # Il browser da solo non puo' salvare un PDF senza il dialogo di stampa.
+    def open_url(self, url):
+        """Apre nel browser predefinito la pagina delle release di BlaBla (solo quell'indirizzo)."""
+        if isinstance(url, str) and url.startswith("https://github.com/Huawetto/BlaBla/"):
+            webbrowser.open(url)
+            return True
+        return False
+
+    def print_to_pdf(self, suggested_name, width_mm, height_mm, path=None):
+        """Ritorna una stringa JSON: {ok, path} oppure {ok:false, cancelled|error}. `path` serve solo
+        ai test automatici: se manca si apre il normale dialogo "Salva con nome"."""
+        try:
+            import webview
+            win = webview.windows[0]
+            if not path:
+                name = (os.path.basename(str(suggested_name or "documento")) or "documento")
+                if not name.lower().endswith(".pdf"):
+                    name += ".pdf"
+                sel = win.create_file_dialog(webview.SAVE_DIALOG, save_filename=name,
+                                             file_types=("PDF (*.pdf)",))
+                if not sel:
+                    return json.dumps({"ok": False, "cancelled": True})
+                path = sel if isinstance(sel, str) else sel[0]
+            if not str(path).lower().endswith(".pdf"):
+                path = str(path) + ".pdf"
+            ok = _native_print_pdf(win, str(path), float(width_mm), float(height_mm))
+            return json.dumps({"ok": bool(ok), "path": str(path)})
+        except Exception as e:  # noqa: BLE001 - il messaggio torna alla pagina e viene mostrato
+            return json.dumps({"ok": False, "error": str(e)})
 
     # ------------------------------------------------------------------
     # I MIEI FONT (font creati in FontCreator): persistiti come file veri in
@@ -248,6 +332,12 @@ def _merge_dir(src, dst):
         if os.path.isdir(s):
             _merge_dir(s, d)
         else:
+            try:                                  # file identico (stessa dimensione e data): non si ricopia
+                ss, ds = os.stat(s), os.stat(d)
+                if ss.st_size == ds.st_size and int(ss.st_mtime) == int(ds.st_mtime):
+                    continue
+            except OSError:
+                pass
             shutil.copy2(s, d)
 
 

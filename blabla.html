@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'none'; connect-src 'self' data: blob: https://tessdata.projectnaptha.com https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="stylesheet" href="modules/modules.css">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'none'; connect-src 'self' data: blob: https://tessdata.projectnaptha.com https://cdn.jsdelivr.net https://api.github.com; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>BlaBla — Editor Documenti</title>
 <style>
 :root{
@@ -871,7 +872,7 @@ function setLoadingSub(s){ $('#bb-loading-sub').textContent=s||''; }
 function hideLoading(){ $('#bb-loading').classList.remove('open'); }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeXml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])); }
-const DOWNLOAD_MIME_BY_EXT={pdf:'application/pdf',blab:'application/json',ttf:'font/ttf'};
+const DOWNLOAD_MIME_BY_EXT={pdf:'application/pdf',blab:'application/json',ttf:'font/ttf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
 /** Salva un file scelto dall'utente. Con la File System Access API (Chrome/Edge
     e quindi anche la finestra nativa dell'app, basata su WebView2) si apre una
     VERA finestra di sistema "Salva con nome" dove scegliere cartella e nome:
@@ -937,6 +938,7 @@ const HtmlSanitizer = {
         else if(n==='class'){ const c=v.split(/\s+/).filter(t=>/^bb-[a-z0-9-]+$/i.test(t)).join(' '); if(c) ch.setAttribute('class',c); else ch.removeAttribute('class'); }
         else if(n==='src' && tag==='IMG'){ if(!this.IMG_SRC.test(v)) ch.remove(); }
         else if(n.startsWith('data-bb-')){ /* marcatori interni dell'editor (import PDF) */ }
+        else if(n==='contenteditable'){ if(v!=='false') ch.removeAttribute(a.name); }     // solo isole NON modificabili (sommario, richiami di nota)
         else if(this.SAFE_ATTRS.has(n)){
           if((n==='width'||n==='height'||n==='colspan'||n==='rowspan'||n==='size'||n==='span'||n==='start') && !this.DIM.test(v)) ch.removeAttribute(a.name);
         }
@@ -953,6 +955,24 @@ const HtmlSanitizer = {
   }
 };
 function sanitizeHtml(html){ return HtmlSanitizer.sanitize(html); }
+
+const APP_VERSION='1.1.0';
+
+/* ======================= API PER I MODULI (window.BB) ======================= */
+// Le funzioni più grandi (intestazioni/piè di pagina, esportazione DOCX, sommario, note, cronologia,
+// lingue…) vivono in modules/*.js, caricati dopo questo script, e usano solo questa API pubblica.
+const BB = {
+  version:APP_VERSION,
+  _on:{}, _ext:[], hooks:{},
+  /** Registra un gestore di evento ('init' = interfaccia pronta, 'ready' = documento caricato). */
+  on(name,fn){ (this._on[name]||(this._on[name]=[])).push(fn); },
+  emit(name,data){ (this._on[name]||[]).forEach(fn=>{ try{ fn(data); }catch(e){ console.error('BB.'+name,e); } }); },
+  async emitAsync(name,data){ for(const fn of (this._on[name]||[])){ try{ await fn(data); }catch(e){ console.error('BB.'+name,e); } } },
+  /** Dati extra salvati nel .blab (meta.ext[key]): un modulo registra get()/set(valore). */
+  extension(key,get,set){ this._ext.push({key,get,set}); },
+  getExt(){ const o={}; this._ext.forEach(x=>{ try{ const v=x.get(); if(v!==undefined) o[x.key]=v; }catch(e){ console.error(e); } }); return o; },
+  setExt(o){ o=o||{}; this._ext.forEach(x=>{ try{ x.set(o[x.key]); }catch(e){ console.error(e); } }); }
+};
 
 /* ======================= STATE ======================= */
 const State = {
@@ -1151,6 +1171,7 @@ const Pages = {
     $('#bb-status-pages').textContent=State.pages.length+(State.pages.length===1?' pagina':' pagine');
     $('#bb-goto-page').max=State.pages.length;
     Navigator.render();
+    BB.emit('renumber');
   },
   /* add ALWAYS adds exactly one page */
   addPage(html, atIndex){
@@ -1266,7 +1287,7 @@ const Pages = {
       for(let i=0;i<rows.length;i++){ if(!rows[i].parentNode) tb.appendChild(rows[i]); }
       return false;
     }
-    const cont=table.cloneNode(false); cont.removeAttribute('data-bb-pgstart'); cont.style.marginTop='0';
+    const cont=table.cloneNode(false); cont.removeAttribute('data-bb-pgstart'); cont.setAttribute('data-bb-cont','1'); cont.style.marginTop='0';
     const cg=table.querySelector('colgroup'); if(cg) cont.appendChild(cg.cloneNode(true));
     const tb2=document.createElement('tbody'); rows.slice(k).forEach(r=>tb2.appendChild(r)); cont.appendChild(tb2);
     if(table.tFoot) cont.appendChild(table.tFoot);     // il piè di tabella va in coda all'ULTIMA parte
@@ -1294,7 +1315,7 @@ const Pages = {
     while(k>0 && cur.scrollHeight>cur.clientHeight+1){ k--; children[k].remove(); }
     if(k===0){ children.forEach(c=>block.appendChild(c)); return false; }
     const moved=children.slice(k);
-    const cont=block.cloneNode(false); cont.removeAttribute('data-bb-pgstart');
+    const cont=block.cloneNode(false); cont.removeAttribute('data-bb-pgstart'); cont.setAttribute('data-bb-cont','1');   // continuazione di un blocco spezzato tra pagine
     if(cont.style){ cont.style.textIndent='0'; cont.style.marginTop='0'; }
     moved.forEach(n=>cont.appendChild(n));
     next.content.insertBefore(cont, next.content.firstElementChild||null);
@@ -1344,7 +1365,9 @@ const Pages = {
     const lastFlow=(root)=>{ let c=root.lastElementChild; while(c&&!isFlow(c))c=c.previousElementSibling; return c; };
     const firstFlow=(root)=>{ let c=root.firstElementChild; while(c&&!isFlow(c))c=c.nextElementSibling; return c; };
     let changed=false, guard=0, i=0;
+    if(BB.hooks.beforeReflow) BB.hooks.beforeReflow();
     while(i<State.pages.length && guard++<20000){
+      if(BB.hooks.beforePageMeasure) BB.hooks.beforePageMeasure(i);     // es. spazio per le note a piè di pagina
       const cur=State.pages[i].content;
       if(cur.scrollHeight>cur.clientHeight+1){
         const last=lastFlow(cur);
@@ -1424,6 +1447,7 @@ const Pages = {
         const candidate=next && firstFlow(next.content);
         if(candidate && !touches(candidate) && !candidate.hasAttribute('data-bb-pgstart')){
           cur.appendChild(candidate);
+          if(BB.hooks.beforePageMeasure) BB.hooks.beforePageMeasure(i);
           if(cur.scrollHeight>cur.clientHeight+1){ next.content.insertBefore(candidate,next.content.firstChild); }
           else { changed=true; continue; } // magari entra anche il blocco dopo
         }
@@ -1502,7 +1526,7 @@ const Pages = {
     const a=State.pages[State.active]; return a?a.content:State.pages[0].content;
   },
   serialize(){
-    return { meta:{pageSize:State.pageSize,orient:State.orient,margins:State.margins,title:$('#bb-doc-title').value},
+    return { meta:{pageSize:State.pageSize,orient:State.orient,margins:State.margins,title:$('#bb-doc-title').value,ext:BB.getExt()},
              pages: State.pages.map(p=>p.content.innerHTML) };
   },
   deserialize(data){
@@ -1517,11 +1541,12 @@ const Pages = {
       $('#bb-side-mtop').value=$('#bb-m-top').value=State.margins.top; $('#bb-side-mbottom').value=$('#bb-m-bottom').value=State.margins.bottom;
       $('#bb-side-mleft').value=$('#bb-m-left').value=State.margins.left; $('#bb-side-mright').value=$('#bb-m-right').value=State.margins.right;
     }
+    BB.setExt(data.meta&&data.meta.ext);
     State.pages=[]; const htmls=(data.pages&&data.pages.length)?data.pages:['<p><br></p>'];
     htmls.forEach(h=>State.pages.push(this.createEl(h)));
-    State.active=0; this.mount(); Stats.update();
+    State.active=0; this.mount(); Stats.update(); BB.emit('deserialized');
   },
-  restyleAll(){ State.pages.forEach(p=>this.applyPageStyle(p.el)); this.reflow(); Navigator.render(); }
+  restyleAll(){ State.pages.forEach(p=>this.applyPageStyle(p.el)); this.reflow(); Navigator.render(); BB.emit('restyle'); }
 };
 /** Reflow "in tempo reale" ma con una breve pausa dopo l'ultimo tasto
     premuto: ricalcolarlo ad ogni carattere sarebbe pesante e inutile mentre
@@ -1644,7 +1669,7 @@ const Autosave = {
     try{ await DocStore.set(this.KEY,json); ok=true; }catch(e){}
     this._busy=false;
     if(ok){ State.dirty=false; State.lastSaved=new Date().toLocaleTimeString();
-      this.setIndicator('ico-check','Salvato '+State.lastSaved);
+      this.setIndicator('ico-check','Salvato '+State.lastSaved); BB.emit('saved',json);
     } else { this.setIndicator('ico-warn','Salvataggio non riuscito: esporta il file (.blab)'); toast('Impossibile salvare automaticamente: salva il documento come .blab','err'); }
     if(this._again){ this._again=false; this.save(); }
   },
@@ -2351,13 +2376,17 @@ const PdfMedia = {
       rasterizzazione + rilevamento griglia + OCR (per cella e per blocco). Poi
       sceglie margini e scala perché OGNI pagina PDF entri nella pagina
       dell'editor (niente più contenuto tagliato dal bordo) e produce l'HTML. */
-  async processPages(pdf,det){
+  /** `pdfs`: un documento pdf.js o un elenco (importazione di più PDF in un solo documento). */
+  async processPages(pdfs,det){
+    pdfs=[].concat(pdfs);
     let ocr=null; const ocrState={};
-    const models=[]; const st={textPages:0,ocrPages:0,tables:0,figures:0,failed:0};
+    const models=[], pageRefs=[]; const st={textPages:0,ocrPages:0,tables:0,figures:0,failed:0};
     try{
+     for(let fi=0;fi<pdfs.length;fi++){
+      const pdf=pdfs[fi], pre=pdfs.length>1?'File '+(fi+1)+'/'+pdfs.length+' · ':'';
       for(let i=1;i<=pdf.numPages;i++){
-        const page=await pdf.getPage(i);
-        setLoadingSub('Pagina '+i+' / '+pdf.numPages+': analisi layout…');
+        const page=await pdf.getPage(i); pageRefs.push({doc:pdf,num:i});
+        setLoadingSub(pre+'Pagina '+i+' / '+pdf.numPages+': analisi layout…');
         const tc=await page.getTextContent();
         const rawText=tc.items.map(it=>it.str).join(' ').trim();
         let model=null;
@@ -2375,7 +2404,7 @@ const PdfMedia = {
               await loadLib('tesseract');
               ocr=await PdfEngine.OcrPool.create({});
             }
-            model=await PdfEngine.Analyze.raster(page,ocr,{state:ocrState,onProgress:(d,t)=>setLoadingSub('OCR pagina '+i+'/'+pdf.numPages+' — '+d+'/'+t)});
+            model=await PdfEngine.Analyze.raster(page,ocr,{state:ocrState,onProgress:(d,t)=>setLoadingSub(pre+'OCR pagina '+i+'/'+pdf.numPages+' — '+d+'/'+t)});
             st.ocrPages++;
           }
         }catch(err){
@@ -2387,11 +2416,12 @@ const PdfMedia = {
         st.tables+=model.stats.tables; st.figures+=model.stats.figures;
         models.push(model);
       }
+     }
       det=this.detectPageSize(models[0].W*this.PT2MM, models[0].H*this.PT2MM);
       let [pw,ph]=PAGE_MM[det.pageSize]; if(det.orient==='landscape') [pw,ph]=[ph,pw];
       const L=PdfEngine.Layout.compute(models,[pw,ph]);
       const pagesHtml=models.map(m=>PdfEngine.Layout.render(m,L));
-      return {pagesHtml,margins:L.mm,stats:st,det};
+      return {pagesHtml,margins:L.mm,stats:st,det,pageRefs};
     } finally {
       if(ocr) await ocr.terminate();
     }
@@ -2401,6 +2431,7 @@ const PdfMedia = {
 /* ======================= IMPORT ======================= */
 const Importer = {
   async open(file){
+    BB.emit('beforeReplace','Prima di aprire «'+file.name+'»');
     const ext=(file.name.split('.').pop()||'').toLowerCase();
     if(ext==='blab') return this.blab(file);
     if(ext==='docx') return this.docx(file);
@@ -2629,33 +2660,50 @@ const Importer = {
       per pagina — SOLO dove manca davvero (una scansione senza alcun testo
       incorporato, prima incollata così com'era come un'unica immagine per
       pagina invece del testo leggibile). */
-  async pdf(file){
-    showLoading('Apertura PDF…','Analisi pagine');
+  async pdf(file){ return this.pdfMany([file]); },
+  /** Apre uno o PIÙ PDF in un unico documento (le pagine di ogni file in sequenza). */
+  async pdfMany(files){
+    const many=files.length>1;
+    showLoading(many?'Apertura di '+files.length+' PDF…':'Apertura PDF…','Analisi pagine');
     try{
       await loadLib('pdfjs');
-      // usa il worker locale solo se anche pdf.min.js è stato caricato da
-      // vendor/ (i due file vanno tenuti in coppia, vedi vendor/README.txt)
+      // il worker è locale (vendor/) insieme a pdf.min.js: le due versioni devono coincidere
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = VENDOR.pdfworker;
-      const buf=await file.arrayBuffer();
-      const pdf=await window.pdfjsLib.getDocument({data:buf,isEvalSupported:false}).promise;
-      // formato/orientamento pagina reali del PDF sorgente (invece di forzare A4 ritratto)
-      const page1=await pdf.getPage(1);
+      const pdfs=[];
+      for(const f of files){
+        const buf=await f.arrayBuffer();
+        pdfs.push(await window.pdfjsLib.getDocument({data:buf,isEvalSupported:false}).promise);
+      }
+      // formato/orientamento pagina reali del primo PDF (invece di forzare A4 ritratto)
+      const page1=await pdfs[0].getPage(1);
       const vp1=page1.getViewport({scale:1});
       const det=PdfMedia.detectPageSize(vp1.width*PdfMedia.PT2MM, vp1.height*PdfMedia.PT2MM);
-      const {pagesHtml,margins,stats,det:det2}=await PdfMedia.processPages(pdf,det);
+      const {pagesHtml,margins,stats,det:det2,pageRefs}=await PdfMedia.processPages(pdfs,det);
       PdfMedia.applyPageSize(det2); PdfMedia.applyMargins(margins);
       State.pages=[]; pagesHtml.forEach(h=>State.pages.push(Pages.createEl(h)));
       if(!State.pages.length)State.pages.push(Pages.createEl());
       Pages.markPageStarts();
       State.active=0; Pages.mount(); Pages.reflow(); Stats.update(); History.snapshot(); Autosave.mark();
-      $('#bb-doc-title').value=file.name.replace(/\.pdf$/i,'');
-      const parts=[pagesHtml.length+' pagine PDF importate'];
+      const base=files[0].name.replace(/\.pdf$/i,'');
+      $('#bb-doc-title').value=many?base+' (+'+(files.length-1)+')':base;
+      const parts=[(many?files.length+' PDF, ':'')+pagesHtml.length+' pagine importate'];
       if(stats.ocrPages) parts.push(stats.ocrPages+' via OCR (nessun testo incorporato)');
       if(stats.tables) parts.push(stats.tables+' tabelle');
       if(stats.figures) parts.push(stats.figures+' figure');
       toast(parts.join(', '),'ok');
+      BB.emit('pdfImported',{pdfs,pageRefs,names:files.map(f=>f.name),stats});
     }catch(e){ console.error(e); toast('Errore apertura PDF: '+e.message,'err'); }
     finally{ hideLoading(); }
+  },
+  /** Apertura di più file insieme: per ora solo PDF (uniti in un solo documento). */
+  async openFiles(files){
+    files=Array.from(files||[]); if(!files.length) return;
+    if(files.length===1) return this.open(files[0]);
+    const ext=f=>(f.name.split('.').pop()||'').toLowerCase();
+    if(!files.every(f=>ext(f)==='pdf')){ toast('Per aprire più file insieme devono essere tutti PDF','err'); return; }
+    files.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    BB.emit('beforeReplace','Prima di aprire '+files.length+' PDF');
+    return this.pdfMany(files);
   },
   _loadHtml(html){
     // split on explicit page breaks if present, else single page
@@ -2693,7 +2741,7 @@ const OCR = {
       const page1=await pdf.getPage(1);
       const vp1=page1.getViewport({scale:1});
       const det=PdfMedia.detectPageSize(vp1.width*PdfMedia.PT2MM, vp1.height*PdfMedia.PT2MM);
-      const {pagesHtml,margins,stats,det:det2}=await PdfMedia.processPages(pdf,det);
+      const {pagesHtml,margins,stats,det:det2,pageRefs}=await PdfMedia.processPages(pdf,det);
       const {textPages,ocrPages}=stats;
       PdfMedia.applyPageSize(det2); PdfMedia.applyMargins(margins);
       State.pages=[]; pagesHtml.forEach(h=>State.pages.push(Pages.createEl(h)));
@@ -2707,6 +2755,7 @@ const OCR = {
       if(stats.tables) parts.push(stats.tables+' tabelle');
       if(stats.figures) parts.push(stats.figures+' figure');
       toast(parts.join(', '),'ok');
+      BB.emit('pdfImported',{pdfs:[pdf],pageRefs,names:[file.name],stats});
     }catch(e){ console.error(e); toast('Errore OCR: '+e.message,'err'); }
     finally{ hideLoading(); }
   }
@@ -2716,7 +2765,44 @@ const OCR = {
 
 /* ======================= EXPORT: PDF, TXT & MARKDOWN ======================= */
 const ExportFile = {
+  /** Prepara il documento per la stampa/PDF: tema chiaro (la carta è bianca), niente selezioni o
+      barre fluttuanti. Ritorna la funzione che ripristina tutto. */
+  _printState(){
+    const root=document.documentElement, prev=root.getAttribute('data-theme');
+    DocSelect.exit(); Media.deselect(); Tables.hideToolbar();
+    root.setAttribute('data-theme','light');
+    return ()=>{ if(prev===null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme',prev); };
+  },
+  /** PDF con TESTO VERO (vettoriale, caratteri incorporati, selezionabile e ricercabile). Nell'app
+      desktop si usa il motore di stampa di WebView2 e il file si salva direttamente; nel browser
+      l'unico modo è il dialogo di stampa ("Salva come PDF"). */
   async pdf(name){
+    const api=pywebviewBridge();
+    if(api && typeof api.print_to_pdf==='function') return this.pdfNative(name,api);
+    return this.pdfBrowser();
+  },
+  async pdfNative(name,api){
+    const {w,h}=Pages.dims();
+    showLoading('Creazione del PDF…','Testo vettoriale');
+    const restore=this._printState();
+    try{
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const res=JSON.parse(await api.print_to_pdf(SaveAs.fileName(name),w,h));
+      if(res.ok) toast('PDF salvato','ok');
+      else if(!res.cancelled) toast('Errore creazione PDF: '+(res.error||'sconosciuto'),'err');
+    }catch(e){ console.error(e); toast('Errore creazione PDF: '+e.message,'err'); }
+    finally{ restore(); hideLoading(); }
+  },
+  pdfBrowser(){
+    toast('Nella finestra di stampa scegli «Salva come PDF» come stampante','ok');
+    const restore=this._printState();
+    const done=()=>{ restore(); window.removeEventListener('afterprint',done); };
+    window.addEventListener('afterprint',done);
+    setTimeout(()=>window.print(),50);
+  },
+  /** PDF a immagini (una per pagina): solo per il browser, quando serve un file senza passare dal
+      dialogo di stampa. Il testo NON è selezionabile e il file è molto più pesante. */
+  async pdfImage(name){
     showLoading('Esportazione PDF…','Rendering pagine');
     try{
       await loadLib('jspdf'); await loadLib('html2canvas');
@@ -2761,8 +2847,14 @@ const ExportFile = {
 const SaveAs = {
   formats:[
     {id:'blab', label:'BlaBla (.blab)', desc:'Il formato nativo di BlaBla: mantiene formattazione, stile, font, testo e immagini'},
-    {id:'pdf',  label:'PDF',  desc:'Pronto per la stampa o la condivisione'}
+    {id:'pdf',  label:'PDF',  desc:'Testo selezionabile e ricercabile, leggero, pronto per stampa e condivisione'}
   ],
+  /** Elenco formati mostrato nel pannello: "PDF a immagini" compare solo nel browser. */
+  list(){
+    const l=this.formats.slice();
+    if(!pywebviewBridge()) l.push({id:'pdfimg',label:'PDF a immagini',desc:'Solo browser: salva senza finestra di stampa, ma il testo non è selezionabile e il file pesa di più'});
+    return l;
+  },
   /** Nome file sicuro per il download: usa quello passato (dal pannello) o in
       mancanza il titolo del documento, ripulito dai caratteri non ammessi nei
       nomi file di Windows/macOS/Linux. */
@@ -2776,7 +2868,7 @@ const SaveAs = {
       '<input id="bb-saveas-name" type="text" minlength="2" maxlength="140" value="'+escapeHtml(current)+'" placeholder="Nome del documento">'+
       '<div class="bb-small" id="bb-saveas-hint">Da 2 a 140 caratteri</div>'+
       '<label style="margin-top:14px">Formato</label>'+
-      '<div class="bb-saveas-formats">'+this.formats.map(f=>
+      '<div class="bb-saveas-formats">'+this.list().map(f=>
         '<label class="bb-saveas-fmt"><input type="radio" name="bb-saveas-fmt" value="'+f.id+'"'+(f.id===(preselect||'blab')?' checked':'')+'>'+
         '<span><b>'+escapeHtml(f.label)+'</b><small>'+escapeHtml(f.desc)+'</small></span></label>'
       ).join('')+'</div>';
@@ -2794,6 +2886,8 @@ const SaveAs = {
     const checked=document.querySelector('input[name="bb-saveas-fmt"]:checked');
     const fmt=checked?checked.value:'blab';
     if(fmt==='pdf')ExportFile.pdf(name);
+    else if(fmt==='pdfimg')ExportFile.pdfImage(name);
+    else if(typeof ExportFile[fmt]==='function')ExportFile[fmt](name);
     else if(fmt==='blab')ExportFile.blab(name);
     return true;
   }
@@ -3286,29 +3380,57 @@ const FontCreatorBridge = {
   close(){ $('#bb-fontcreator-overlay').classList.remove('open'); }
 };
 
-/* ======================= SELEZIONE DI TUTTO IL DOCUMENTO ======================= */
-// Ogni pagina è un campo modificabile a sé, e il browser non può selezionare testo che
-// attraversa più campi: "Seleziona tutto" prendeva solo la pagina corrente, così Ctrl+C
-// copiava (e Ctrl+X/Canc cancellavano) una pagina sola. Qui "tutto" è simulato: le pagine
-// vengono evidenziate e copia/taglia/cancella/incolla/scrittura agiscono sull'intero
-// documento; la formattazione si applica a ogni pagina (vedi wrapper di Format più sotto).
+/* ======================= SELEZIONE TRA PIÙ PAGINE ======================= */
+// Ogni pagina è un campo modificabile a sé e il browser non può selezionare testo che attraversa
+// più campi. La selezione "multipagina" è quindi simulata: un insieme di intervalli (uno per pagina)
+// evidenziati con la Custom Highlight API, creato da Ctrl+A (tutto il documento), da un
+// trascinamento del mouse che esce dalla pagina di partenza o da Maiusc+clic in un'altra pagina.
+// Copia/taglia/cancella/incolla/scrittura agiscono su tutti gli intervalli; la formattazione si
+// applica a ognuno (vedi wrapper di Format più sotto).
 const DocSelect = {
-  active:false, _busy:false,
+  active:false, all:false, parts:[], _busy:false, _drag:null, _last:null, _timer:null, lastCaret:null,
+  _full(i){ const r=document.createRange(); r.selectNodeContents(State.pages[i].content); return r; },
+  _paint(){
+    if(!(window.Highlight && window.CSS && CSS.highlights)) return;
+    try{ CSS.highlights.set('bb-docsel', new Highlight(...this.parts.map(x=>x.range))); }catch(e){}
+  },
+  _show(parts,all){ this.parts=parts; this.all=!!all; this.active=true; this._paint(); },
+  /** Ctrl+A: tutto il documento. */
   enter(){
-    this.active=true;
-    if(window.Highlight && window.CSS && CSS.highlights){
-      const rs=State.pages.map(p=>{ const r=document.createRange(); r.selectNodeContents(p.content); return r; });
-      try{ CSS.highlights.set('bb-docsel', new Highlight(...rs)); }catch(e){}
-    }
-    const c=Pages.activeContent(), sel=window.getSelection(), r=document.createRange();
-    r.selectNodeContents(c); sel.removeAllRanges(); sel.addRange(r);
+    this._show(State.pages.map((p,i)=>({i,range:this._full(i)})),true);
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(this._full(State.active<State.pages.length?State.active:0));
   },
   exit(){
-    if(!this.active) return; this.active=false;
+    if(!this.active) return; this.active=false; this.all=false; this.parts=[];
     if(window.CSS && CSS.highlights) CSS.highlights.delete('bb-docsel');
   },
-  text(){ return State.pages.map(p=>Stats._text(p.content)).join('\n'); },
-  html(){ return State.pages.map(p=>p.content.innerHTML).join(''); },
+  /** Posizione {i,node,off} sotto il puntatore, sempre dentro il contenuto di una pagina. */
+  pointAt(x,y){
+    let r=null;
+    if(document.caretRangeFromPoint) r=document.caretRangeFromPoint(x,y);
+    else if(document.caretPositionFromPoint){ const cp=document.caretPositionFromPoint(x,y); if(cp){ r=document.createRange(); r.setStart(cp.offsetNode,cp.offset); } }
+    if(r){ const j=State.pages.findIndex(p=>p.content.contains(r.startContainer)); if(j>=0) return {i:j,node:r.startContainer,off:r.startOffset}; }
+    let best=0, bd=Infinity;
+    State.pages.forEach((p,k)=>{ const b=p.el.getBoundingClientRect(); const d=y<b.top?b.top-y:(y>b.bottom?y-b.bottom:0); if(d<bd){ bd=d; best=k; } });
+    const c=State.pages[best].content, b=c.getBoundingClientRect();
+    return (y>b.top+b.height/2)?{i:best,node:c,off:c.childNodes.length}:{i:best,node:c,off:0};
+  },
+  /** Selezione tra due punti di pagine diverse. Ritorna false se sono nella stessa pagina. */
+  fromPoints(a,b){
+    if(a.i===b.i) return false;
+    const [f,l]=a.i<b.i?[a,b]:[b,a], parts=[];
+    for(let i=f.i;i<=l.i;i++){
+      const c=State.pages[i].content, r=document.createRange();
+      if(i===f.i){ r.setStart(f.node,f.off); r.setEnd(c,c.childNodes.length); }
+      else if(i===l.i){ r.setStart(c,0); r.setEnd(l.node,l.off); }
+      else r.selectNodeContents(c);
+      parts.push({i,range:r});
+    }
+    this._show(parts,false); return true;
+  },
+  _rangeBox(r){ const d=document.createElement('div'); d.appendChild(r.cloneContents()); return d; },
+  text(){ return this.parts.map(x=>Stats._text(this._rangeBox(x.range))).join('\n'); },
+  html(){ return this.parts.map(x=>this._rangeBox(x.range).innerHTML).join(''); },
   /** Svuota il documento lasciando UNA pagina vuota col cursore dentro. */
   clearAll(){
     State.pages.slice(1).forEach(p=>p.el.remove()); State.pages.length=1;
@@ -3317,23 +3439,92 @@ const DocSelect = {
     const r=document.createRange(); r.setStart(c.firstChild,0); r.collapse(true);
     const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
     this.exit(); Autosave.mark(); Stats.update(); History.snapshot();
+  },
+  /** Elimina il testo selezionato (anche su più pagine): le pagine intermedie spariscono e il
+      paragrafo dove finisce la selezione si unisce a quello dove inizia, come in un editor normale. */
+  removeSelected(){
+    if(!this.active) return;
+    if(this.all){ this.clearAll(); return; }
+    const parts=this.parts.slice(); if(!parts.length){ this.exit(); return; }
+    const firstPg=State.pages[parts[0].i], lastPg=State.pages[parts[parts.length-1].i];
+    const mids=parts.slice(1,-1).map(x=>State.pages[x.i]);
+    const startNode=parts[0].range.startContainer, startOff=parts[0].range.startOffset;
+    // il paragrafo dove inizia la selezione si individua PRIMA di cancellare: dopo, il nodo di testo
+    // di partenza può non esistere più
+    let bl=startNode; while(bl && bl.parentNode!==firstPg.content) bl=bl.parentNode;
+    parts.forEach(x=>x.range.deleteContents());
+    mids.forEach(pg=>{ const k=State.pages.indexOf(pg); if(k>=0){ State.pages.splice(k,1); pg.el.remove(); } });
+    const A=firstPg.content, B=lastPg.content;
+    const flow=el=>el && el.style.position!=='absolute';
+    let tail=B.firstElementChild; while(tail && !flow(tail)) tail=tail.nextElementSibling;
+    let caret={node:A,off:Math.min(startOff,A.childNodes.length)};
+    const textBlock=el=>el && /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|PRE)$/.test(el.tagName);
+    if(firstPg!==lastPg && bl && bl!==A && textBlock(bl) && textBlock(tail)){
+      bl.normalize(); tail.normalize();            // la cancellazione lascia nodi di testo vuoti: un paragrafo con solo quelli sparirebbe (altezza 0)
+      if(bl.childNodes.length===1 && bl.firstChild.nodeName==='BR') bl.removeChild(bl.firstChild);
+      const mark=bl.childNodes.length;
+      while(tail.firstChild) bl.appendChild(tail.firstChild);
+      tail.remove();
+      if(!bl.firstChild) bl.appendChild(document.createElement('br'));
+      caret={node:bl,off:Math.min(mark,bl.childNodes.length)};
+    } else if(bl && bl!==A){ caret={node:bl,off:Math.min(startOff,bl.childNodes.length)}; }
+    if(firstPg!==lastPg){
+      const rest=Array.from(B.children).filter(flow);
+      if(!rest.length && State.pages.length>1){ const k=State.pages.indexOf(lastPg); if(k>=0){ State.pages.splice(k,1); lastPg.el.remove(); } }
+    }
+    // paragrafi rimasti senza contenuto visibile (solo nodi di testo vuoti): servono a tenere il cursore
+    [A,B].forEach(c=>{ if(c.isConnected) c.querySelectorAll(':scope>p,:scope>div,:scope>h1,:scope>h2,:scope>h3').forEach(e=>{ e.normalize(); if(!e.firstChild) e.appendChild(document.createElement('br')); }); });
+    if(!A.firstElementChild) A.innerHTML='<p><br></p>';
+    if(State.pages.includes(lastPg) && lastPg!==firstPg && !B.firstElementChild) B.innerHTML='<p><br></p>';
+    State.active=Math.max(0,State.pages.indexOf(firstPg)); Pages.renumber();
+    A.focus();
+    try{
+      const r=document.createRange(); const n=caret.node.isConnected?caret.node:A;
+      r.setStart(n,Math.min(caret.off,n.nodeType===3?n.nodeValue.length:n.childNodes.length)); r.collapse(true);
+      const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    }catch(e){}
+    this.exit();
+    pasteSettle(()=>Pages.reflow());
+    Autosave.mark(); Stats.update(); History.snapshot();
+  },
+  /** Applica una formattazione a ogni intervallo selezionato con un solo passo di annulla. */
+  formatEach(fn){
+    const all=this.all, parts=this.parts.map(x=>({pg:State.pages[x.i],range:x.range.cloneRange()}));
+    this._busy=true; History.suspended=true;
+    try{
+      parts.forEach(pt=>{
+        State.active=Math.max(0,State.pages.indexOf(pt.pg)); pt.pg.content.focus();
+        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(pt.range); _lastEditorRange=pt.range.cloneRange();
+        fn();
+      });
+    } finally { History.suspended=false; this._busy=false; }
+    if(all) this.enter(); else this._paint();
+    Autosave.mark(); Stats.update(); History.snapshot();
+  },
+  /* ---- trascinamento col mouse / Maiusc+clic ---- */
+  _tick(){
+    const d=this._drag, l=this._last; if(!d||!l) return;
+    const f=this.pointAt(l.x,l.y);
+    if(f.i!==d.anchor.i) this.fromPoints(d.anchor,f);
+    else if(this.active && !this.all){ this.exit(); }
+  },
+  startDrag(e){
+    this._last={x:e.clientX,y:e.clientY}; this._drag={anchor:this.pointAt(e.clientX,e.clientY)};
+    clearInterval(this._timer); this._timer=setInterval(()=>this._tick(),90);   // continua anche durante lo scorrimento automatico
+  },
+  stopDrag(){ clearInterval(this._timer); this._drag=null; this._last=null; },
+  trackCaret(){
+    const sel=window.getSelection(); if(!sel.rangeCount || !sel.isCollapsed) return;
+    const n=sel.anchorNode; const i=State.pages.findIndex(p=>p.content.contains(n));
+    if(i>=0) this.lastCaret={i,node:n,off:sel.anchorOffset};
   }
 };
-// la formattazione con "tutto selezionato" si applica a TUTTE le pagine, con un solo passo di annulla
+// la formattazione con una selezione multipagina si applica a TUTTI gli intervalli
 ['exec','block','font','size','smallCaps','style'].forEach(name=>{
   const orig=Format[name];
   Format[name]=function(...args){
     if(!DocSelect.active || DocSelect._busy) return orig.apply(this,args);
-    DocSelect._busy=true; History.suspended=true;
-    try{
-      State.pages.forEach((pg,i)=>{
-        State.active=i; pg.content.focus();
-        const r=document.createRange(); r.selectNodeContents(pg.content);
-        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); _lastEditorRange=r.cloneRange();
-        orig.apply(this,args);
-      });
-    } finally { History.suspended=false; DocSelect._busy=false; }
-    State.active=0; DocSelect.enter(); Autosave.mark(); Stats.update(); History.snapshot();
+    return DocSelect.formatEach(()=>orig.apply(this,args));
   };
 });
 
@@ -3415,9 +3606,11 @@ function wire(){
         {title:'Creare un nuovo documento?', yesLabel:'Sì, crea nuovo'});
       if(!ok) return;
     }
+    BB.emit('beforeReplace','Prima di creare un nuovo documento');
     State.pages=[Pages.createEl()]; State.active=0; Pages.mount(); $('#bb-doc-title').value='Documento senza titolo'; History.stack=[];History.idx=-1; History.snapshot(); Stats.update(); toast('Nuovo documento','ok'); });
   $('#bb-open').addEventListener('click',()=>$('#bb-file-open').click());
-  $('#bb-file-open').addEventListener('change',e=>{ if(e.target.files[0])Importer.open(e.target.files[0]); e.target.value=''; });
+  $('#bb-file-open').setAttribute('multiple','');
+  $('#bb-file-open').addEventListener('change',e=>{ if(e.target.files.length)Importer.openFiles(e.target.files); e.target.value=''; });
   $('#bb-ocr').addEventListener('click',()=>$('#bb-file-ocr').click());
   $('#bb-file-ocr').addEventListener('change',e=>{ if(e.target.files[0])OCR.run(e.target.files[0]); e.target.value=''; });
   $('#bb-saveas').addEventListener('click',()=>SaveAs.open('blab'));
@@ -3498,7 +3691,7 @@ function wire(){
   const isFileDrag=e=>!!(e.dataTransfer && Array.from(e.dataTransfer.types||[]).includes('Files'));
   ['dragenter','dragover'].forEach(ev=>area.addEventListener(ev,e=>{ if(!isFileDrag(e))return; e.preventDefault(); area.classList.add('dragover'); }));
   ['dragleave','drop'].forEach(ev=>area.addEventListener(ev,e=>{ if(!isFileDrag(e))return; e.preventDefault(); if(ev==='drop'||e.target===area)area.classList.remove('dragover'); }));
-  area.addEventListener('drop',e=>{ if(!isFileDrag(e))return; const f=e.dataTransfer.files[0]; if(f){ if(f.type.startsWith('image/'))Media.insertFile(f); else Importer.open(f); } });
+  area.addEventListener('drop',e=>{ if(!isFileDrag(e))return; const fl=Array.from(e.dataTransfer.files||[]); if(!fl.length)return; if(fl.length===1&&fl[0].type.startsWith('image/'))Media.insertFile(fl[0]); else Importer.openFiles(fl); });
 
   // Backspace all'inizio del primo blocco di una pagina con interruzione: toglie l'interruzione
   document.addEventListener('keydown',e=>{
@@ -3511,27 +3704,43 @@ function wire(){
     if(pre.toString()!=='' || pre.cloneContents().querySelector('img')) return;
     e.preventDefault(); blk.removeAttribute('data-bb-pgstart'); pasteSettle(()=>Pages.reflow()); Autosave.mark(); Stats.update(); History.snapshot(); toast('Interruzione di pagina rimossa','ok');
   },true);
-  // selezione di tutto il documento (vedi DocSelect)
+  // selezione tra più pagine (vedi DocSelect)
+  document.addEventListener('selectionchange',()=>DocSelect.trackCaret());
   document.addEventListener('keydown',e=>{
     const mod=e.ctrlKey||e.metaKey, k=(e.key||'').toLowerCase();
     const ae=document.activeElement, inEditor=!!(ae && ae.closest && ae.closest('.bb-page-content'));
     if(mod && k==='a' && inEditor && !$('#bb-modal-back').classList.contains('open')){ e.preventDefault(); DocSelect.enter(); return; }
     if(!DocSelect.active) return;
     if(mod && (k==='c'||k==='x')) return;                       // li gestiscono gli eventi copy/cut
-    if(mod && k==='v'){ DocSelect.clearAll(); return; }           // l'incolla sostituisce tutto
-    if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); DocSelect.clearAll(); return; }
-    if((e.key.length===1 && !mod) || e.key==='Enter'){ DocSelect.clearAll(); return; }   // il tasto va nella pagina rimasta
+    if(mod && k==='v'){ DocSelect.removeSelected(); return; }     // l'incolla sostituisce la selezione
+    if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); DocSelect.removeSelected(); return; }
+    if((e.key.length===1 && !mod && !e.altKey) || e.key==='Enter'){ DocSelect.removeSelected(); return; }   // il tasto va dove resta il cursore
     if(['Shift','Control','Alt','Meta','CapsLock'].includes(e.key)) return;
     if(mod && ['s','f','p','n','o','+','=','-','0'].includes(k)) return;
     DocSelect.exit();
   },true);
-  document.addEventListener('mousedown',e=>{ if(DocSelect.active && !e.target.closest('#bb-ribbon,#bb-menubar,#bb-edit-ctx')) DocSelect.exit(); },true);
+  document.addEventListener('mousedown',e=>{
+    if(e.button!==0) return;                                    // il tasto destro mantiene la selezione (menu Copia/Taglia)
+    const keepUi=e.target.closest('#bb-ribbon,#bb-menubar,#bb-edit-ctx');
+    const inContent=e.target.closest('.bb-page-content');
+    if(inContent && e.shiftKey){                                // Maiusc+clic: estende la selezione fino a questa pagina
+      const anchor=(DocSelect._drag&&DocSelect._drag.anchor)||DocSelect.lastCaret;
+      if(anchor){
+        const f=DocSelect.pointAt(e.clientX,e.clientY);
+        if(f.i!==anchor.i && anchor.node.isConnected){ e.preventDefault(); DocSelect.fromPoints(anchor,f); DocSelect._drag={anchor}; return; }
+      }
+    }
+    if(DocSelect.active && !keepUi) DocSelect.exit();
+    if(inContent && !e.shiftKey) DocSelect.startDrag(e);
+  },true);
+  document.addEventListener('mousemove',e=>{ if(DocSelect._drag && (e.buttons&1)){ DocSelect._last={x:e.clientX,y:e.clientY}; DocSelect._tick(); } },true);
+  document.addEventListener('mouseup',()=>{ DocSelect.stopDrag(); },true);
   const docClip=e=>{
     if(!DocSelect.active) return;
     e.preventDefault();
     e.clipboardData.setData('text/plain',DocSelect.text());
     e.clipboardData.setData('text/html',DocSelect.html());
-    if(e.type==='cut') DocSelect.clearAll();
+    if(e.type==='cut') DocSelect.removeSelected();
   };
   document.addEventListener('copy',docClip); document.addEventListener('cut',docClip);
 
@@ -3599,6 +3808,7 @@ async function init(){
   Theme.load();
   FontCreatorBridge.init();
   await CustomFonts.init();
+  BB.emit('init');
 
   if(!await Autosave.loadAsync()){
     State.pages=[Pages.createEl('<h1>Benvenuto in BlaBla</h1><p>Editor di documenti completo: scrivi, importa <b>DOCX</b> e <b>PDF</b>, esegui l\'<b>OCR</b>, gestisci pagine, tabelle e immagini, poi esporta.</p><p><br></p>')];
@@ -3606,12 +3816,32 @@ async function init(){
   }
   History.stack=[]; History.idx=-1; History.snapshot();
   Stats.update(); Zoom.set(100); status('Pronto');
+  BB.emit('ready');
   setTimeout(()=>Navigator.render(),200);
 }
 
+Object.assign(BB,{ $, $$, State, Pages, History, Autosave, Format, Stats, Zoom, Navigator, Media, Tables, Fonts, CustomFonts,
+  Importer, ExportFile, SaveAs, DocSelect, Find, Theme, Modal, Shortcuts, PdfMedia, OCR, DocStore, HtmlSanitizer,
+  toast, status, download, showLoading, hideLoading, setLoadingSub, escapeHtml, MM2PX, PAGE_MM, loadLib, VENDOR,
+  restoreEditorSelection, scheduleReflow, pasteSettle, pywebviewBridge, stripUnsupportedContent, Confirm });
+window.BB=BB;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
 })();
 </script>
+<script src="modules/version.js"></script>
+<script src="modules/ui.js"></script>
+<script src="modules/header-footer.js"></script>
+<script src="modules/notes.js"></script>
+<script src="modules/export-docx.js"></script>
+<script src="modules/versions.js"></script>
+<script src="modules/styles.js"></script>
+<script src="modules/templates.js"></script>
+<script src="modules/language.js"></script>
+<script src="modules/images.js"></script>
+<script src="modules/pdf-review.js"></script>
+<script src="modules/update.js"></script>
+<script src="modules/i18n-en.js"></script>
+<script src="modules/i18n.js"></script>
 </body>
 </html>

@@ -1,0 +1,130 @@
+/* Dizionario italiano → inglese dell'interfaccia (testi fissi) e regole per i messaggi con numeri/nomi.
+   Le chiavi sono i testi italiani esatti com'è scritto nell'interfaccia. Caricato da modules/i18n.js. */
+(function(){
+'use strict';
+const D={
+// ---- barra dei menu / generali
+'+ Nuovo':'+ New','Nuovo':'New','Nuovo documento (Ctrl+N)':'New document (Ctrl+N)','Modelli':'Templates','Nuovo documento da un modello':'New document from a template',
+'Aggiornamenti':'Updates','Versione e controllo aggiornamenti':'Version and update check','Apri':'Open','Apri file (Ctrl+O)':'Open file (Ctrl+O)','Apri file':'Open file',
+'Salva come…':'Save as…','Scegli nome e formato per salvare il documento':'Choose a name and format to save the document','Stampa':'Print','Stampa (Ctrl+P)':'Print (Ctrl+P)',
+'Annulla':'Cancel','Annulla (Ctrl+Z)':'Undo (Ctrl+Z)','Ripeti':'Redo','Ripeti (Ctrl+Y)':'Redo (Ctrl+Y)','Titolo documento':'Document title','Documento senza titolo':'Untitled document',
+'Scorciatoie da tastiera (F1)':'Keyboard shortcuts (F1)','Scorciatoie da tastiera':'Keyboard shortcuts','Pronto':'Ready','Salvato':'Saved','Stato salvataggio automatico':'Autosave status',
+'Tema':'Theme','Tema: automatico (clic per scuro)':'Theme: automatic (click for dark)','Tema: chiaro (clic per automatico)':'Theme: light (click for automatic)','Tema: scuro (clic per chiaro)':'Theme: dark (click for light)',
+'Interfaccia':'Interface','Lingua dell\'interfaccia':'Interface language','Chiudi':'Close','OK':'OK','Sì':'Yes','No':'No','Salva':'Save','Elimina':'Delete','Modifica':'Edit','Applica':'Apply','Conferma':'Confirm',
+// ---- schede
+'Home':'Home','Inserisci':'Insert','Layout':'Layout','Riferimenti':'References','Visualizza':'View','Revisione PDF':'PDF review','Import / Export':'Import / Export','PDF / Pagina':'PDF / Page',
+'Appunti':'Clipboard','Incolla':'Paste','Copia':'Copy','Taglia':'Cut','Carattere':'Font','Caratteri':'Characters','Paragrafo':'Paragraph','Paragrafi':'Paragraphs','Stili rapidi':'Quick styles','Stili personalizzati':'Custom styles',
+'Stili personalizzati…':'Custom styles…','Stili di paragrafo':'Paragraph styles','Stile del paragrafo':'Paragraph style','Stile blocco':'Block style','Formattazione':'Formatting','Modifica pagina':'Page editing',
+'Tipo di carattere':'Typeface','Cerca font…':'Search fonts…','Dimensione':'Size','Dimensione carattere':'Font size','Corpo':'Body','Preset testo':'Text presets','Spaziatura':'Spacing','Spaziatura tra i caratteri':'Character spacing','Spazio lett.':'Letter sp.',
+'Interlinea':'Line spacing','Colore del testo':'Text color','Colore testo':'Text color','Colore di evidenziazione':'Highlight color','Evidenziazione':'Highlight','Grassetto (Ctrl+B)':'Bold (Ctrl+B)','Corsivo (Ctrl+I)':'Italic (Ctrl+I)','Sottolineato (Ctrl+U)':'Underline (Ctrl+U)',
+'Barrato':'Strikethrough','Apice':'Superscript','Pedice':'Subscript','Maiuscoletto':'Small caps','Rimuovi formattazione':'Clear formatting','Sinistra':'Left','Centra':'Center','Destra':'Right','Giustifica':'Justify',
+'Elenco puntato':'Bulleted list','Elenco numerato':'Numbered list','Aumenta rientro':'Increase indent','Riduci rientro':'Decrease indent','Liste':'Lists','Formato':'Format','Normale':'Normal','Titolo':'Title','Sottotitolo':'Subtitle',
+'Titolo 1':'Heading 1','Titolo 2':'Heading 2','Titolo 3':'Heading 3','Titolo 4':'Heading 4','Citazione':'Quote','Codice':'Code','Ab':'Ab','Ag':'Ag',
+'Crea uno stile dalla formattazione del paragrafo attuale':'Create a style from the current paragraph formatting','Gestisci':'Manage','Disegna un font personalizzato a mano e usalo subito in BlaBla':'Draw a custom font by hand and use it right away in BlaBla',
+'Crea Font':'Create Font','I miei font':'My fonts','Nessun font creato ancora — usa il bottone dorato':'No fonts created yet — use the golden button','nella tab Home per disegnarne uno.':'in the Home tab to draw one.',
+// ---- inserisci
+'Immagine':'Image','Tabella':'Table','Righe':'Rows','Colonne':'Columns','Linea':'Line','Interr. pagina':'Page break','Interruzione di pagina':'Page break','Aggiungi una nuova pagina':'Add a new page','Elimina pagina':'Delete page','Pagina':'Page','Pagine':'Pages','＋ Nuova pagina':'＋ New page','Nuova pagina':'New page','Vai':'Go','Vai alla pagina':'Go to page','Elementi':'Items',
+'Numeri':'Numbering','Numeri di pagina':'Page numbers','N. pagina':'Page no.','Intest./piè':'Header/footer','Intestazione e piè di pagina':'Header and footer','Sommario':'Table of contents','Aggiorna il sommario':'Update table of contents','Aggiorna':'Update',
+'Inserisce un sommario dai titoli (Titolo 1-3)':'Inserts a table of contents built from headings (Heading 1-3)','Nota a piè':'Footnote','Inserisce una nota a piè di pagina al cursore':'Inserts a footnote at the cursor','Didascalia':'Caption',
+'Inserisce una nuova riga sopra quella dove si trova il cursore':'Inserts a new row above the cursor row','Inserisce una nuova riga sotto quella dove si trova il cursore':'Inserts a new row below the cursor row',
+'Inserisce una nuova colonna prima di quella dove si trova il cursore':'Inserts a new column before the cursor column','Inserisce una nuova colonna dopo quella dove si trova il cursore':'Inserts a new column after the cursor column',
+'Elimina la riga dove si trova il cursore':'Deletes the cursor row','Elimina la colonna dove si trova il cursore':'Deletes the cursor column',
+// ---- layout
+'Impostazioni pagina':'Page settings','Formato pagina':'Page size','Orientamento pagina':'Page orientation','Orient.':'Orient.','Verticale':'Portrait','Orizzontale':'Landscape','Margini':'Margins','Unità':'Units','Unità di misura':'Unit of measure','Reset':'Reset',
+'Margine superiore (mm)':'Top margin (mm)','Margine inferiore (mm)':'Bottom margin (mm)','Margine sinistro (mm)':'Left margin (mm)','Margine destro (mm)':'Right margin (mm)','Sup (mm)':'Top (mm)','Inf (mm)':'Bottom (mm)','Sx (mm)':'Left (mm)','Dx (mm)':'Right (mm)',
+'Margine ↑ (mm)':'Margin ↑ (mm)','Margine ↓ (mm)':'Margin ↓ (mm)','Margine ← (mm)':'Margin ← (mm)','Margine → (mm)':'Margin → (mm)','Letter (216×279)':'Letter (216×279)','Lingua':'Language','Lingua del documento':'Document language',
+'Lingua e correzione':'Language and spelling','Correttore ortografico':'Spell checker','Sottolinea le parole sbagliate mentre scrivi, con i dizionari installati nel sistema':'Underlines misspelled words as you type, using the dictionaries installed on your system',
+// ---- visualizza
+'Zoom':'Zoom','Zoom +':'Zoom +','Zoom -':'Zoom -','Aumenta zoom (Ctrl++)':'Zoom in (Ctrl++)','Riduci zoom (Ctrl+-)':'Zoom out (Ctrl+-)','Zoom 100% (Ctrl+0)':'Zoom 100% (Ctrl+0)','Navigator':'Navigator','Pannello':'Panel','Ricerca':'Search',
+'Trova':'Find','Trova…':'Find…','Trova & Sostituisci':'Find & Replace','Sostituisci con…':'Replace with…','Sostit.':'Replace','Tutti':'All','Statistiche':'Statistics','Parole':'Words','Punti':'Bullets','Cronologia':'History','Versioni':'Versions',
+'Versioni precedenti del documento':'Previous versions of the document','Salva versione':'Save version','Salva ora una copia del documento nella cronologia':'Save a copy of the document to the history now','Confronta':'Compare','Parole dubbie':'Doubtful words',
+'Mostra la pagina originale del PDF accanto al testo':'Show the original PDF page next to the text','Vai alla prossima parola da ricontrollare (F8)':'Go to the next word to recheck (F8)','Torna a BlaBla':'Back to BlaBla','Torna a BlaBla (Esc)':'Back to BlaBla (Esc)',
+// ---- import/export
+'Apri DOCX':'Open DOCX','Apri PDF':'Open PDF','Importa PDF':'Import PDF','OCR PDF':'OCR PDF','Esporta .blab':'Export .blab','Esporta PDF':'Export PDF','Riconoscimento testo (OCR) da PDF scansionato':'Text recognition (OCR) from a scanned PDF',
+'Ridimensiona (mantiene le proporzioni)':'Resize (keeps proportions)','Ridimensiona solo in altezza':'Resize height only','Ridimensiona solo in larghezza':'Resize width only','Elaborazione…':'Processing…','Riga 1, Col 1':'Line 1, Col 1','1 pagina':'1 page','Pagina 1':'Page 1',
+'📥 Rilascia qui il file (.docx / .doc / .pdf)':'📥 Drop the file here (.docx / .doc / .pdf)','rilascia qui il file':'drop the file here','Esc':'Esc',
+// ---- fonts
+'132 font caricati automaticamente da "fonts/"':'132 fonts loaded automatically from "fonts/"',
+// ---- lingue
+'Italiano':'Italiano','English':'English',
+// ---- finestre
+'Nuovo da modello':'New from template','Nuovo documento':'New document','Salva con nome':'Save as','Nome file':'File name','Dimensioni immagine':'Image size','Proprietà immagine':'Image properties','Ritaglia immagine':'Crop image','Ritaglia':'Crop','Larghezza':'Width','Altezza':'Height',
+'Disposizione':'Layout','Disposizione del testo':'Text wrapping','Disposizione del testo e testo alternativo':'Text wrapping and alternative text','Testo alternativo':'Alternative text','In linea con il testo':'Inline with text','Testo a sinistra':'Text on the left','Testo a destra':'Text on the right',
+'Immagine a sinistra, il testo le scorre accanto':'Image on the left, text flows beside it','Immagine a destra, il testo le scorre accanto':'Image on the right, text flows beside it','Immagine centrata, il testo resta sopra e sotto':'Centered image, text stays above and below',
+'Libera (sopra il testo)':'Free (above the text)','Si sposta dove vuoi; il testo non la evita':'Moves anywhere; text does not avoid it','Aggiunge una didascalia numerata sotto l\'immagine':'Adds a numbered caption below the image',
+'Questa immagine non si può ritagliare':'This image cannot be cropped','Immagine ritagliata':'Image cropped','Ritaglio':'Crop',
+'Piè di pagina':'Footer','Intestazione':'Header','Numero di pagina':'Page number','Posizione':'Position','Linea sotto l\'intestazione':'Line under the header','Linea sopra il piè di pagina':'Line above the footer','Non mostrare nella prima pagina':'Do not show on the first page','Non numerare la prima pagina':'Do not number the first page',
+'Piè di pagina — a destra':'Footer — right','Piè di pagina — a sinistra':'Footer — left','Piè di pagina — al centro':'Footer — center','Totale pagine':'Total pages','Pagina del documento':'Document page','Pagina 1 di N':'Page 1 of N','Pagina {pagina}':'Page {pagina}','Pagina {pagina} di {pagine}':'Page {pagina} of {pagine}','- {pagina} -':'- {pagina} -','{pagina} / {pagine}':'{pagina} / {pagine}',
+'Clicca un campo per scriverci, poi un pulsante per inserire Pagina, Totale pagine, Titolo del documento o Data.':'Click a field to type in it, then a button to insert Page, Total pages, Document title or Date.',
+'Nessuno':'None','Scegli «Nessuno» per togliere la numerazione.':'Choose “None” to remove numbering.','Data':'Date','Al centro':'Center','A destra':'Right','A sinistra':'Left','In basso':'Bottom','In alto':'Top',
+'Margini aumentati a 18 mm per fare spazio a intestazione/piè di pagina':'Margins increased to 18 mm to make room for the header/footer',
+'Nuova nota a piè di pagina':'New footnote','Modifica nota':'Edit note','Testo della nota':'Note text','Scrivi qui la nota…':'Write the note here…','Elimina la nota':'Delete note','Scrivi il testo della nota':'Write the note text',
+'Nessun titolo nel documento: applica lo stile Titolo 1/2/3 e aggiorna il sommario.':'No headings in the document: apply the Heading 1/2/3 style and update the table of contents.','Sommario aggiornato':'Table of contents updated','Indice':'Contents',
+'Nuovo stile di paragrafo':'New paragraph style','Dai un nome allo stile':'Name the style','Nome dello stile':'Style name','Tipo di blocco':'Block type','Esiste già uno stile con questo nome':'A style with this name already exists','Stile aggiornato in tutto il documento':'Style updated throughout the document',
+'Posiziona il cursore in un paragrafo':'Place the cursor in a paragraph','Nuovo stile dal testo selezionato':'New style from the selected text','Elimina stile':'Delete style',
+'Non hai ancora stili personalizzati. «Nuovo stile» ne crea uno copiando la formattazione del paragrafo dove si trova il cursore.':'You have no custom styles yet. “New style” creates one by copying the formatting of the paragraph at the cursor.',
+'Lo stile viene eliminato; i paragrafi che lo usano mantengono l\'aspetto attuale.':'The style is deleted; paragraphs using it keep their current look.',
+'Salva la versione attuale':'Save the current version','Ripristina':'Restore','Elimina questa versione':'Delete this version','Prima del ripristino':'Before restore','Di sicurezza':'Automatic backup','Cronologia non salvata':'History not saved','Impossibile salvare la versione':'Could not save the version','IndexedDB non disponibile':'IndexedDB not available',
+'Non ci sono ancora versioni. Se ne crea una ogni 10 minuti di lavoro, prima di aprire un file o creare un nuovo documento, e quando premi «Salva versione».':'There are no versions yet. One is created every 10 minutes of work, before opening a file or creating a new document, and when you press “Save version”.',
+'Prima di creare un nuovo documento':'Before creating a new document','Sì, ripristina':'Yes, restore','Sì, crea nuovo':'Yes, create new','Sì, elimina':'Yes, delete','Sì, svuota':'Yes, empty','Sì, usa il modello':'Yes, use the template','Sì, conferma tutte':'Yes, confirm all',
+'Originale':'Original','Chiudi il confronto':'Close comparison','Conferma tutte':'Confirm all','Considera corretta questa parola e passa alla successiva':'Treat this word as correct and go to the next',
+'Apri un PDF per vedere qui la pagina originale accanto al testo ricostruito.':'Open a PDF to see the original page here next to the reconstructed text.','Nessuna parola dubbia':'No doubtful words','Confermare tutte le parole?':'Confirm all words?',
+'Il confronto è disponibile dopo aver aperto un PDF in questa sessione':'Comparison is available after opening a PDF in this session',
+'Creare un nuovo documento?':'Create a new document?','Modifiche non salvate':'Unsaved changes','Le modifiche non salvate andranno perse. Vuoi comunque creare un nuovo documento?':'Unsaved changes will be lost. Do you still want to create a new document?',
+'Eliminare la pagina?':'Delete the page?','Svuotare la pagina?':'Empty the page?','Eliminare il font?':'Delete the font?','Pagina svuotata':'Page emptied','Conferma':'Confirm',
+'I testi tra [parentesi quadre] sono da sostituire con i tuoi.':'Text in [square brackets] is meant to be replaced with your own.','Il documento attuale viene sostituito dal modello. Ne resta una copia nella cronologia versioni.':'The current document is replaced by the template. A copy stays in the version history.',
+'Apri la pagina':'Open the page','Controlla ora':'Check now','Controlla automaticamente ogni giorno':'Check automatically every day','Non riesco a contattare GitHub (serve internet solo per questo controllo).':'Cannot reach GitHub (internet is needed only for this check).',
+'Scarica l\'installatore dalla pagina della release: aggiorna il programma mantenendo documenti e font.':'Download the installer from the release page: it updates the program and keeps your documents and fonts.','Controllo aggiornamenti…':'Checking for updates…',
+// ---- salva come / formati
+'Documento Word modificabile: titoli, elenchi, tabelle, immagini, intestazioni e note':'Editable Word document: headings, lists, tables, images, headers and notes','Il formato nativo di BlaBla: mantiene formattazione, stile, font, testo e immagini':'BlaBla\'s native format: keeps formatting, styles, fonts, text and images',
+'Testo selezionabile e ricercabile, leggero, pronto per stampa e condivisione':'Selectable, searchable text; lightweight and ready for printing and sharing','Solo browser: salva senza finestra di stampa, ma il testo non è selezionabile e il file pesa di più':'Browser only: saves without a print dialog, but text is not selectable and the file is larger',
+'Salva come PDF':'Save as PDF','salva come PDF':'save as PDF','Nella finestra di stampa scegli «Salva come PDF» come stampante':'In the print dialog choose “Save as PDF” as the printer','Il nome file deve avere tra 2 e 140 caratteri':'The file name must be 2 to 140 characters long',
+'Salva ora':'Save now','Salvato in locale':'Saved locally','Salvataggio non disponibile':'Saving not available','Salvataggio non riuscito: esporta il file (.blab)':'Saving failed: export the file (.blab)','Impossibile salvare automaticamente: salva il documento come .blab':'Cannot autosave: save the document as .blab',
+// ---- messaggi
+'Seleziona del testo':'Select some text','Seleziona tutto il documento':'Select the whole document','Massimo 200 righe per tabella':'Maximum 200 rows per table','Massimo 40 colonne per tabella':'Maximum 40 columns per table','Permesso incolla negato':'Paste permission denied',
+'Interruzione di pagina rimossa':'Page break removed','File .blab aperto':'.blab file opened','File .blab salvato':'.blab file saved','Apertura file .blab…':'Opening .blab file…','Lettura documento':'Reading document','Apertura DOCX…':'Opening DOCX…','Conversione contenuto':'Converting content','DOCX importato':'DOCX imported',
+'Apertura DOC…':'Opening DOC…','Estrazione testo (formato legacy)':'Extracting text (legacy format)','Apertura RTF…':'Opening RTF…','RTF importato':'RTF imported','Testo importato':'Text imported','Apertura PDF…':'Opening PDF…','Analisi pagine':'Analyzing pages','Elaborazione PDF…':'Processing PDF…',
+'File .doc non valido o non riconosciuto':'Invalid or unrecognized .doc file','Nessun testo leggibile trovato nel file .doc':'No readable text found in the .doc file','DOC importato (solo testo: formato legacy, senza formattazione)':'DOC imported (text only: legacy format, no formatting)',
+'Per aprire più file insieme devono essere tutti PDF':'To open several files together they must all be PDFs','Creazione del PDF…':'Creating the PDF…','Testo vettoriale':'Vector text','PDF salvato':'PDF saved','PDF esportato':'PDF exported','Esportazione PDF…':'Exporting PDF…','Rendering pagine':'Rendering pages',
+'Creazione del documento Word':'Creating the Word document','File Word salvato':'Word file saved','Nuovo documento':'New document',
+'Questo font è stato creato prima che fosse possibile riaprirlo per la modifica: puoi solo eliminarlo o esportarlo, non modificarlo':'This font was created before it could be reopened for editing: you can only delete or export it',
+'Riapri in FontCreator per modificarlo':'Reopen in FontCreator to edit it','Esporta come .ttf sul PC (per usarlo come tastiera personalizzata su Android o come font di sistema, es. per scrivere su WhatsApp)':'Export as .ttf on your PC (to use as a custom keyboard on Android or as a system font)',
+'Disattiva (resta salvato, sparisce dal menu font)':'Disable (stays saved, disappears from the font menu)','Non modificabile: creato prima che questa funzione fosse disponibile':'Not editable: created before this feature was available','font personalizzato':'custom font',
+'Sì, elimina definitivamente':'Yes, delete permanently',
+'Scrittura su disco non riuscita':'Writing to disk failed','Parole lette con poca sicurezza':'Words read with low confidence','Analisi pagina':'Analyzing page',
+'Intestazione sinistra':'Header left','Intestazione centro':'Header center','Intestazione destra':'Header right','Piè di pagina sinistra':'Footer left','Piè di pagina centro':'Footer center','Piè di pagina destra':'Footer right',
+'Intestazione — a destra':'Header — right','Intestazione — al centro':'Header — center','Intestazione — a sinistra':'Header — left','Sinistra':'Left','Centro':'Center',
+'Rientro 1ª riga (mm)':'First-line indent (mm)','Spazio prima (pt)':'Space before (pt)','Spazio dopo (pt)':'Space after (pt)','➕ Riga sopra':'➕ Row above','➕ Riga sotto':'➕ Row below','➕ Colonna prima':'➕ Column before','➕ Colonna dopo':'➕ Column after','🗑 Riga':'🗑 Row','🗑 Colonna':'🗑 Column','🗑 Tabella':'🗑 Table',
+// ---- modelli
+'Lettera formale':'Formal letter','Comunicazione ufficiale con oggetto e firma':'Official communication with subject and signature','Relazione':'Report','Verbale di riunione':'Meeting minutes','Presenti, ordine del giorno, decisioni e azioni':'Attendees, agenda, decisions and actions','Résumé / CV':'Résumé / CV','Avviso':'Notice','Ordine del giorno':'Agenda'
+};
+// ---- regole per testi con numeri o nomi variabili: [espressione, sostituzione]
+const R=[
+[/^Salvato (.*)$/,'Saved $1'],
+[/^Riga (\d+), Col (\d+)$/,'Line $1, Col $2'],
+[/^(.*) — (\d+) pagin[ae], (\d+) parol[ae](.*)$/,(m,d,p,w,r)=>d+' — '+p+(p==='1'?' page':' pages')+', '+w+(w==='1'?' word':' words')+r],
+[/^(\d+) pagine?$/,(m,n)=>n+(n==='1'?' page':' pages')],
+[/^Pagina (\d+) di (\d+)$/,'Page $1 of $2'],[/^Pagina (\d+) di (\d+) · (.*)$/,'Page $1 of $2 · $3'],
+[/^Pagina (\d+) eliminata$/,'Page $1 deleted'],[/^(\d+) sostituzioni$/,(m,n)=>n+(n==='1'?' replacement':' replacements')],
+[/^(\d+) parol[ae]$/,(m,n)=>n+(n==='1'?' word':' words')],[/^(\d+) caratteri$/,'$1 characters'],[/^(\d+) righe?$/,(m,n)=>n+(n==='1'?' line':' lines')],
+[/^(\d+) parol[ae] da ricontrollare$/,(m,n)=>n+(n==='1'?' word to recheck':' words to recheck')],
+[/^(\d+) parole da ricontrollare \(F8\)$/,'$1 words to recheck (F8)'],
+[/^(\d+) parole lette con poca sicurezza sono evidenziate: usa F8 per ricontrollarle$/,'$1 words read with low confidence are highlighted: press F8 to recheck them'],
+[/^Le (\d+) parole evidenziate vengono considerate corrette e l'evidenziazione sparisce\.$/,'The $1 highlighted words are treated as correct and the highlighting disappears.'],
+[/^Apertura di (\d+) PDF…$/,'Opening $1 PDFs…'],[/^(\d+) font caricati automaticamente da "fonts\/"$/,'$1 fonts loaded automatically from "fonts/"'],
+[/^Font "(.*)" eliminato$/,'Font "$1" deleted'],[/^Font "(.*)" esportato come \.ttf$/,'Font "$1" exported as .ttf'],[/^Font "(.*)" salvato in modo permanente in "I miei font"$/,'Font "$1" permanently saved in "My fonts"'],
+[/^Eliminare definitivamente il font "(.*)"\?.*$/,'Permanently delete the font "$1"? Text already written with this font in open documents will keep the name but will no longer find the font.'],
+[/^Errore apertura (.*): (.*)$/,'Error opening $1: $2'],[/^Errore (OCR|nel salvare il font creato|creazione PDF|export PDF): (.*)$/,(m,a,b)=>({'OCR':'OCR error','nel salvare il font creato':'Error saving the created font','creazione PDF':'PDF creation error','export PDF':'PDF export error'}[a])+': '+b],
+[/^Esportazione \.ttf non riuscita: (.*)$/,'.ttf export failed: $1'],[/^Formato non supportato: \.(.*)$/,'Unsupported format: .$1'],[/^Documento aperto: (.*)$/,'Document opened: $1'],[/^DOCX caricato: (.*)$/,'DOCX loaded: $1'],
+[/^La pagina (\d+) contiene del testo\. Eliminarla comunque\? Il contenuto andrà perso\.$/,'Page $1 contains text. Delete it anyway? The content will be lost.'],
+[/^Il documento attuale sarà sostituito dalla versione del (.*)$/,'The current document will be replaced by the version from $1'],
+[/^Modello «(.*)» applicato: sostituisci i testi tra \[parentesi quadre\]$/,'Template “$1” applied: replace the texts in [square brackets]'],
+[/^Usare il modello «(.*)»\?$/,'Use the template “$1”?'],[/^Prima del modello «(.*)»$/,'Before template “$1”'],[/^Prima di aprire (.*)$/,'Before opening $1'],
+[/^È disponibile BlaBla (.*) — apri «Aggiornamenti» per i dettagli$/,'BlaBla $1 is available — open “Updates” for details'],[/^È disponibile BlaBla (.*) \(hai la (.*)\)\.$/,'BlaBla $1 is available (you have $2).'],
+[/^Hai già l'ultima versione \((.*)\)\.$/,'You already have the latest version ($1).'],[/^Versione installata: (.*)$/,'Installed version: $1'],
+[/^(\d+) pagine importate(.*)$/,(m,n,r)=>n+' pages imported'+r.replace(' con testo diretto',' with direct text').replace(' via OCR (nessun testo incorporato)',' via OCR (no embedded text)')],
+[/^Figura (\d+): (.*)$/,'Figure $1: $2'],[/^Tabella (\d+): (.*)$/,'Table $1: $2'],[/^OCR pagina (\d+)(.*)$/,'OCR page $1$2'],[/^Analisi pagina (\d+)(.*)$/,'Analyzing page $1$2'],
+[/^(\d+) minut[oi] fa$/,(m,n)=>n+(n==='1'?' minute ago':' minutes ago')],[/^(\d+) or[ae] fa$/,(m,n)=>n+(n==='1'?' hour ago':' hours ago')],[/^adesso$/,'now']
+];
+BB.I18N_EN={dict:D,rules:R};
+})();

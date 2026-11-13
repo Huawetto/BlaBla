@@ -1,0 +1,86 @@
+name: Release
+
+# Si avvia quando pubblichi un tag di versione (es. v1.1.0): costruisce l'installatore, lo zip portatile e le
+# impronte SHA-256 e li allega alla release di GitHub.
+# Firma digitale (facoltativa): vedi docs/SIGNING.md. Senza i segreti indicati il passaggio di firma viene saltato.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Dipendenze di build
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Controlla che il tag coincida con la versione dell'app
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path modules/version.js -Pattern 'BB_VERSION="([^"]+)"').Matches[0].Groups[1].Value
+          if ("v$v" -ne "${{ github.ref_name }}") { throw "Il tag ${{ github.ref_name }} non coincide con modules/version.js ($v)" }
+
+      - name: Build (programma, installatore, zip portatile)
+        run: python tools/build_exe.py
+
+      # --- firma con SignPath (https://signpath.org/): richiede il progetto approvato e questi segreti/variabili ---
+      - name: Carica l'installatore per la firma
+        id: upload-unsigned
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned
+          path: dist/BlaBla-Setup-*.exe
+
+      - name: Firma con SignPath
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Sostituisci con l'installatore firmato e ricalcola le impronte
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        shell: pwsh
+        run: |
+          Copy-Item signed\BlaBla-Setup-*.exe dist\ -Force
+          Get-ChildItem dist\BlaBla-Setup-*.exe, dist\BlaBla-*-portable.zip |
+            ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
+            Set-Content dist\SHA256SUMS.txt -Encoding utf8
+
+      - name: Pubblica la release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/BlaBla-Setup-*.exe
+            dist/BlaBla-*-portable.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        with:
+          name: BlaBla-build
+          path: |
+            dist/BlaBla-Setup-*.exe
+            dist/BlaBla-*-portable.zip
+            dist/SHA256SUMS.txt

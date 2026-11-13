@@ -557,6 +557,7 @@ function groupLines(items){
   return lines;
 }
 
+const LOW_CONF=75;
 function flagsHtml(items,gapOf){
   const runs=[];
   items.forEach((it,k)=>{
@@ -565,10 +566,12 @@ function flagsHtml(items,gapOf){
       const prev=items[k-1], gap=it.x0-prev.x1, sz=it.size||10;
       if(gap>0.12*sz && !/\s$/.test(prev.s) && !/^\s/.test(it.s)) t=' '+t;
     }
+    // parola letta dall'OCR con poca sicurezza: si evidenzia per farla ricontrollare
+    const low=(it.ocr && typeof it.conf==='number' && it.conf<LOW_CONF && /[A-Za-zÀ-ÿ0-9]/.test(it.s))?Math.round(it.conf):0;
     const last=runs[runs.length-1];
-    if(last && last.b===it.bold && last.i===it.italic) last.t+=t; else runs.push({t,b:it.bold,i:it.italic});
+    if(last && last.b===it.bold && last.i===it.italic && last.low===low) last.t+=t; else runs.push({t,b:it.bold,i:it.italic,low});
   });
-  return runs.map(r=>{ let t=r.t; if(r.i) t='<i>'+t+'</i>'; if(r.b) t='<b>'+t+'</b>'; return t; }).join('');
+  return runs.map(r=>{ let t=r.t; if(r.low) t='<span class="bb-lowconf" data-bb-conf="'+r.low+'">'+t+'</span>'; if(r.i) t='<i>'+t+'</i>'; if(r.b) t='<b>'+t+'</b>'; return t; }).join('');
 }
 function boldRatio(items){ let b=0,n=0; items.forEach(i=>{ const l=i.s.length; n+=l; if(i.bold) b+=l; }); return n?b/n:0; }
 

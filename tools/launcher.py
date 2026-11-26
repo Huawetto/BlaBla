@@ -322,74 +322,93 @@ class Api:
             return False
 
 
-def _merge_dir(src, dst):
-    """Copia il contenuto di src dentro dst, aggiungendo/aggiornando i file
-    dell'app ma senza mai cancellare quanto trovato in dst e non presente in
-    src — cosi' font o librerie vendor aggiunti a mano dall'utente restano."""
-    os.makedirs(dst, exist_ok=True)
-    for name in os.listdir(src):
-        s, d = os.path.join(src, name), os.path.join(dst, name)
-        if os.path.isdir(s):
-            _merge_dir(s, d)
-        else:
-            try:                                  # file identico (stessa dimensione e data): non si ricopia
-                ss, ds = os.stat(s), os.stat(d)
-                if ss.st_size == ds.st_size and int(ss.st_mtime) == int(ds.st_mtime):
-                    continue
-            except OSError:
-                pass
-            shutil.copy2(s, d)
-
-
-def _prune_retired_fonts(src, dst):
-    """Toglie dalla cartella stabile i font ritirati dal pacchetto (es. quelli proprietari), elencati
-    in fonts/_retired.json. I font aggiunti a mano dall'utente non sono nell'elenco e restano intatti."""
-    try:
-        with open(os.path.join(src, "fonts", "_retired.json"), encoding="utf-8") as f:
-            retired = json.load(f)
-    except (OSError, ValueError):
+def _migrate_old_layout(user):
+    """Le versioni fino alla 1.1.0 copiavano tutta l'app (~200 MB) in %LOCALAPPDATA%/BlaBla a ogni aggiornamento.
+    Ora l'app si serve direttamente dalla sua cartella e li' restano solo i dati dell'utente: se c'e' una copia
+    vecchia la si toglie (libera spazio sui PC con il disco pieno). Si fa in un thread, una volta sola.
+    I font aggiunti dall'utente (e quelli creati in FontCreator) non si toccano."""
+    marker = os.path.join(user, ".bb-layout2")
+    if os.path.exists(marker):
         return
-    for name in retired:
+    try:
+        bundled = set()
+        fonts_src = os.path.join(app_dir(), "fonts")
+        if os.path.isdir(fonts_src):
+            bundled = set(os.listdir(fonts_src))
+        for name in ("blabla.html", "vendor", "engine", "modules", "assets", "FontCreator", "build.id", ".bb-version"):
+            p = os.path.join(user, name)
+            if os.path.isdir(p):
+                shutil.rmtree(p, ignore_errors=True)
+            elif os.path.isfile(p):
+                os.remove(p)
+        ufonts = os.path.join(user, "fonts")
+        if os.path.isdir(ufonts):
+            try:                                          # font ritirati (es. proprietari) delle versioni vecchie
+                with open(os.path.join(app_dir(), "fonts", "_retired.json"), encoding="utf-8") as f:
+                    retired = set(os.path.basename(n) for n in json.load(f))
+            except (OSError, ValueError):
+                retired = set()
+            for name in os.listdir(ufonts):
+                if name in bundled or name in retired or name in ("fonts.js", "_retired.json"):
+                    try:
+                        os.remove(os.path.join(ufonts, name))
+                    except OSError:
+                        pass
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write("2")
+    except OSError:
+        pass                                              # non e' grave: la pulizia si ritenta al prossimo avvio
+
+
+def user_data_dir():
+    d = stable_install_dir()
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def fonts_manifest_js(user):
+    """Elenco dei font: quelli dell'app piu' quelli aggiunti a mano dall'utente in %LOCALAPPDATA%/BlaBla\fonts."""
+    names = set()
+    for base in (os.path.join(app_dir(), "fonts"), os.path.join(user, "fonts")):
         try:
-            os.remove(os.path.join(dst, "fonts", os.path.basename(name)))
+            names.update(f for f in os.listdir(base) if os.path.splitext(f)[1].lower() in VALID_FONT_EXT)
         except OSError:
             pass
+    lines = ",\n".join('  "%s"' % n.replace("\\", "\\\\").replace('"', '\\"') for n in sorted(names, key=str.lower))
+    return ("/* Generato da BlaBla all'avvio: font dell'app + font aggiunti a mano nella cartella dell'utente. */\n"
+            "window.BB_FONTS = [\n" + lines + "\n];\n").encode("utf-8")
 
 
-def ensure_installed():
-    target = stable_install_dir()
-    marker = os.path.join(target, ".bb-version")
-    current = open(marker, encoding="utf-8").read().strip() if os.path.exists(marker) else None
-    if current != VERSION:
-        _prune_retired_fonts(app_dir(), target)
-        _merge_dir(app_dir(), target)
-        with open(marker, "w", encoding="utf-8") as f:
-            f.write(VERSION)
-    return target
-
-
-def regenerate_fonts_manifest(target):
-    """Rigenera fonts/fonts.js scansionando la cartella: cosi' anche i font
-    aggiunti a mano dall'utente nella cartella stabile vengono rilevati senza
-    bisogno di lanciare a parte tools/update-fonts (che qui non c'e')."""
-    fonts_dir = os.path.join(target, "fonts")
-    if not os.path.isdir(fonts_dir):
-        return
+def low_memory_pc():
+    """True se il PC ha poca RAM (8 GB o meno) o poca RAM libera: in quel caso il motore web si avvia in
+    modalita' a basso consumo. Mai un errore: nel dubbio False."""
     try:
-        names = sorted(
-            (f for f in os.listdir(fonts_dir) if os.path.splitext(f)[1].lower() in VALID_FONT_EXT),
-            key=str.lower,
-        )
-        lines = ",\n".join('  "%s"' % n.replace("\\", "\\\\").replace('"', '\\"') for n in names)
-        content = (
-            "/* Generato automaticamente da BlaBla.exe all'avvio: rileva i font\n"
-            "   presenti in questa cartella, comprese eventuali aggiunte manuali. */\n"
-            "window.BB_FONTS = [\n" + lines + "\n];\n"
-        )
-        with open(os.path.join(fonts_dir, "fonts.js"), "w", encoding="utf-8") as f:
-            f.write(content)
-    except OSError:
-        pass  # non bloccare l'avvio dell'app per un problema sui font
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong), ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong), ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong), ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong), ("sullAvailExtendedVirtual", ctypes.c_ulonglong)]
+        st = MEMORYSTATUSEX()
+        st.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))
+        gb = 1024 ** 3
+        return st.ullTotalPhys <= 8.5 * gb or st.ullAvailPhys < 2.5 * gb
+    except Exception:
+        return False
+
+
+def tune_webview_for_weak_pc():
+    """Aggiunge ai parametri di WebView2 quelli a basso consumo di memoria sui PC con poca RAM. Si accodano a
+    quelli eventualmente gia' impostati (es. porta di debug dei test)."""
+    if os.environ.get("BLABLA_FULL_POWER") or not (os.environ.get("BLABLA_LOW_MEMORY") or low_memory_pc()):
+        return False
+    extra = "--enable-low-end-device-mode --renderer-process-limit=2 --disable-features=CalculateNativeWinOcclusion"
+    cur = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "")
+    if "enable-low-end-device-mode" not in cur:
+        os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (cur + " " + extra).strip()
+    return True
 
 
 # Porte candidate per il server locale: FISSE (non casuali). Il salvataggio
@@ -407,7 +426,22 @@ FIXED_PORTS = (51888, 51889, 51890)
 class _QuietHandler(http.server.SimpleHTTPRequestHandler):
     # File dell'utente che stanno nella stessa cartella servita ma che il browser non deve
     # mai poter leggere via HTTP: l'app li raggiunge solo dal ponte Python (classe Api).
-    PRIVATE_NAMES = {"document.json", "manifest.json", ".bb-version"}
+    PRIVATE_NAMES = {"document.json", "manifest.json", ".bb-version", ".bb-layout2"}
+    app_root = None       # cartella dell'app (sola lettura)
+    user_root = None      # dati dell'utente: font creati/aggiunti
+
+    def translate_path(self, path):
+        """L'app si serve dalla sua cartella; solo custom_fonts/ e i font aggiunti a mano dall'utente vengono da
+        %LOCALAPPDATA%/BlaBla. La risoluzione dei percorsi la fa comunque la libreria (niente ".." o unita')."""
+        parts = [p for p in urllib.parse.unquote(urllib.parse.urlsplit(path).path).split("/") if p]
+        root = self.app_root
+        if parts and parts[0] == "custom_fonts":
+            root = self.user_root
+        elif len(parts) > 1 and parts[0] == "fonts" and ":" not in "".join(parts) and ".." not in parts \
+                and os.path.isfile(os.path.join(self.user_root, *parts)):
+            root = self.user_root
+        self.directory = root
+        return super().translate_path(path)
 
     def log_message(self, fmt, *args):
         pass  # niente log delle richieste in console
@@ -425,6 +459,15 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if not self._allowed():
             self.send_error(403, "Forbidden")
+            return
+        if urllib.parse.urlsplit(self.path).path == "/fonts/fonts.js":
+            body = fonts_manifest_js(self.user_root)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
             return
         super().do_GET()
 
@@ -498,11 +541,14 @@ def _open_native_window(url):
 
 
 def main():
-    target = ensure_installed()
-    regenerate_fonts_manifest(target)
+    user = user_data_dir()
+    _QuietHandler.app_root = app_dir()
+    _QuietHandler.user_root = user
+    threading.Thread(target=_migrate_old_layout, args=(user,), daemon=True).start()
+    tune_webview_for_weak_pc()
 
     def handler(*args, **kwargs):
-        _QuietHandler(*args, directory=target, **kwargs)
+        _QuietHandler(*args, directory=app_dir(), **kwargs)
 
     port, httpd = start_server(handler)
     url = "http://127.0.0.1:%d/blabla.html" % port

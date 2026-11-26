@@ -130,6 +130,7 @@ button{font:inherit;color:inherit}
 #bb-font-pop{position:fixed;z-index:150;width:260px;background:var(--chrome);border:1px solid var(--line-2);
   border-radius:8px;box-shadow:var(--shadow);padding:8px;display:none;flex-direction:column}
 #bb-font-pop.open{display:flex}
+.bb-font-item{content-visibility:auto;contain-intrinsic-size:auto 30px}
 .bb-mini-btn{border:1px solid var(--line);background:var(--chrome-2);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 .bb-mini-btn:hover{border-color:var(--line-2)}
 .bb-mini-btn.accent{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -167,7 +168,7 @@ button{font:inherit;color:inherit}
 /* EDITOR */
 #bb-editor-area{flex:1;overflow:auto;position:relative;background:var(--bg);padding:24px}
 #bb-pages-scaler{transform-origin:top center;display:flex;flex-direction:column;align-items:center;gap:24px}
-.bb-page{position:relative;background:var(--page);box-shadow:var(--shadow);border-radius:2px}
+.bb-page{position:relative;background:var(--page);box-shadow:var(--shadow);border-radius:2px;contain:layout style}
 /* Calibri è anche il primo font in State.fonts e l'etichetta iniziale di
    #bb-font-current: se il contenuto non lo applicasse DAVVERO, il primo
    comando di formattazione (grassetto, corsivo...) rilegge il font reale
@@ -234,7 +235,7 @@ button{font:inherit;color:inherit}
 .bb-nav-goto{display:flex;gap:6px;padding:0 12px 8px}
 .bb-nav-goto input{width:60px}
 #bb-thumbs{padding:0 12px 16px;display:flex;flex-direction:column;gap:10px}
-.bb-thumb{position:relative;border:1px solid var(--line);border-radius:6px;background:var(--page);cursor:pointer;overflow:hidden;aspect-ratio:210/297}
+.bb-thumb{position:relative;border:1px solid var(--line);border-radius:6px;background:var(--page);cursor:pointer;overflow:hidden;aspect-ratio:210/297;contain:strict}
 .bb-thumb.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .bb-thumb-mini{transform-origin:top left;pointer-events:none;color:var(--ink);padding:6px;font-size:9px;line-height:1.2;overflow:hidden}
 .bb-thumb-label{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;text-align:center;padding:2px}
@@ -645,6 +646,7 @@ kbd{background:var(--chrome-2);border:1px solid var(--line-2);border-bottom-widt
         <div class="bb-group">
           <div class="bb-group-body">
             <button class="bb-btn big" id="bb-zoom-out2" title="Riduci zoom (Ctrl+-)"><svg class="bb-ico bb-big-ico"><use href="#ico-zoomout"></use></svg>Zoom -</button>
+            <button class="bb-btn big" id="bb-zoom-fit" title="Adatta la pagina alla larghezza della finestra"><svg class="bb-ico bb-big-ico"><use href="#ico-zoomreset"></use></svg>Adatta</button>
             <button class="bb-btn big" id="bb-zoom-reset" title="Zoom 100% (Ctrl+0)"><svg class="bb-ico bb-big-ico"><use href="#ico-zoomreset"></use></svg>Reset</button>
             <button class="bb-btn big" id="bb-zoom-in2" title="Aumenta zoom (Ctrl++)"><svg class="bb-ico bb-big-ico"><use href="#ico-zoomin"></use></svg>Zoom +</button>
           </div>
@@ -987,15 +989,39 @@ const State = {
 /* ======================= HISTORY (snapshot based) ======================= */
 const History = {
   stack:[], idx:-1, max:80, suspended:false, _snapTimer:null,
+  /* Memoria: ogni scatto conserva l'HTML di tutte le pagine. Per non occupare centinaia di MB (a PC con poca RAM
+     bastano poche pagine con foto):
+     - le immagini incorporate (data:) si tengono UNA volta sola e gli scatti ne citano il riferimento;
+     - le pagine non cambiate riusano la stessa stringa dello scatto precedente;
+     - il numero di scatti conservati scende col peso del documento (da 80 a un minimo di 10). */
+  _imgs:new Map(), _tok:new Map(), _n:0,
+  _pack(html){
+    if(html.indexOf('data:image')<0) return html;
+    return html.replace(/data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]{4000,}/gi,m=>{
+      let t=this._tok.get(m); if(!t){ t='bbimg:'+(++this._n); this._tok.set(m,t); this._imgs.set(t,m); } return t; });
+  },
+  _unpack(html){ return html.indexOf('bbimg:')<0?html:html.replace(/bbimg:\d+/g,t=>this._imgs.get(t)||''); },
+  _prune(){
+    if(this._imgs.size<24) return;
+    const used=new Set();
+    this.stack.forEach(sn=>sn.pages.forEach(h=>{ const m=h.match(/bbimg:\d+/g); if(m) m.forEach(t=>used.add(t)); }));
+    for(const [t,uri] of this._imgs) if(!used.has(t)){ this._imgs.delete(t); this._tok.delete(uri); }
+  },
   snapshot(){
     if(this.suspended) return;
     clearTimeout(this._snapTimer);
-    const snap = Pages.serialize();
-    if(this.idx>=0 && this.stack[this.idx]===snap) return;
+    const raw = Pages.serialize();
+    const prev = this.idx>=0 ? this.stack[this.idx] : null;
+    const pages = raw.pages.map((h,i)=>{ const q=this._pack(h); return (prev && prev.pages[i]===q) ? prev.pages[i] : q; });
+    const snap = { meta:raw.meta, pages };
+    if(prev && JSON.stringify(prev.meta)===JSON.stringify(snap.meta) && prev.pages.length===pages.length && pages.every((h,i)=>h===prev.pages[i])) return;
     this.stack = this.stack.slice(0,this.idx+1);
     this.stack.push(snap);
-    if(this.stack.length>this.max) this.stack.shift();
+    const size = pages.reduce((a,h)=>a+h.length,0);
+    const limit = Math.max(10, Math.min(this.max, Math.floor(30e6/Math.max(size,1))));
+    while(this.stack.length>limit) this.stack.shift();
     this.idx = this.stack.length-1;
+    this._prune();
   },
   /** Per la digitazione: un checkpoint di annulla/ripeti ad ogni carattere è
       inutile (serializza tutte le pagine ogni volta) e rende l'undo troppo
@@ -1005,7 +1031,7 @@ const History = {
   scheduleSnapshot(){ clearTimeout(this._snapTimer); this._snapTimer=setTimeout(()=>this.snapshot(),500); },
   undo(){ if(this.idx>0){ this.idx--; this._restore(); } },
   redo(){ if(this.idx<this.stack.length-1){ this.idx++; this._restore(); } },
-  _restore(){ this.suspended=true; Pages.deserialize(this.stack[this.idx]); this.suspended=false; Autosave.mark(); }
+  _restore(){ const sn=this.stack[this.idx]; this.suspended=true; Pages.deserialize({meta:sn.meta,pages:sn.pages.map(h=>this._unpack(h))}); this.suspended=false; Autosave.mark(); }
 };
 
 /** Testo semplice incollato -> HTML a paragrafi. execCommand('insertText') con migliaia di
@@ -1556,7 +1582,9 @@ function scheduleReflow(){ clearTimeout(_reflowTimer); _reflowTimer=setTimeout((
 
 /* ======================= CURSOR / STATS ======================= */
 const Cursor = {
-  update(){
+  _raf:0,
+  update(){ if(Cursor._raf) return; Cursor._raf=requestAnimationFrame(()=>{ Cursor._raf=0; Cursor._update(); }); },
+  _update(){
     const sel=window.getSelection(); if(!sel.rangeCount) return;
     const node=sel.anchorNode; if(!node) return;
     const content=State.pages[State.active]?State.pages[State.active].content:null;
@@ -1585,7 +1613,10 @@ const Stats = {
     }
     return out;
   },
-  update(){
+  /** Raggruppa le richieste: ricontare parole e righe di TUTTE le pagine a ogni tasto rallenta i documenti lunghi. */
+  update(){ if(this._t) return; this._t=setTimeout(()=>{ this._t=null; this._compute(); },State.pages.length>8?400:120); },
+  now(){ clearTimeout(this._t); this._t=null; this._compute(); },
+  _compute(){
     let words=0,chars=0,lines=0,paras=0;
     State.pages.forEach(p=>{
       const t=this._text(p.content);
@@ -1635,6 +1666,10 @@ const DocStore = {
     const db=await this._open();
     return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); });
   },
+  async del(k){
+    const db=await this._open();
+    return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); });
+  },
   async get(k){
     const db=await this._open();
     return new Promise((res,rej)=>{ const q=db.transaction('kv','readonly').objectStore('kv').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
@@ -1664,9 +1699,13 @@ const Autosave = {
     }catch(e){ try{ localStorage.removeItem(this.KEY); }catch(_){} }
     // 2) app desktop: file su disco (si controlla il risultato)
     const api=pywebviewBridge();
-    if(api){ try{ if((await api.save_document(json))===true) ok=true; }catch(e){} }
-    // 3) IndexedDB: per i documenti grandi (immagini)
-    try{ await DocStore.set(this.KEY,json); ok=true; }catch(e){}
+    let fileOk=false;
+    if(api){ try{ if((await api.save_document(json))===true){ ok=true; fileOk=true; } }catch(e){} }
+    // 3) IndexedDB: per i documenti grandi (immagini). Se il file su disco e' stato scritto non si duplica
+    //    (risparmia tempo e spazio sui PC lenti) e si toglie l'eventuale copia vecchia, che altrimenti potrebbe
+    //    riapparire se il file sparisse.
+    if(fileOk){ try{ await DocStore.del(this.KEY); }catch(e){} }
+    else { try{ await DocStore.set(this.KEY,json); ok=true; }catch(e){} }
     this._busy=false;
     if(ok){ State.dirty=false; State.lastSaved=new Date().toLocaleTimeString();
       this.setIndicator('ico-check','Salvato '+State.lastSaved); BB.emit('saved',json);
@@ -2242,40 +2281,52 @@ const Media = {
 
 /* ======================= NAVIGATOR ======================= */
 const Navigator = {
+  _io:null, _timers:{},
+  /** Le miniature duplicano l'HTML di ogni pagina: con decine di pagine raddoppiano il DOM e rallentano
+      ogni tasto premuto. Quindi si riempiono solo quando sono visibili nel pannello (IntersectionObserver)
+      e, se il pannello è chiuso o la miniatura fuori vista, un aggiornamento si limita a segnarla "da rifare". */
+  _observer(){
+    if(this._io || typeof IntersectionObserver==='undefined') return this._io;
+    this._io=new IntersectionObserver(es=>{ es.forEach(e=>{ const t=e.target; t._vis=e.isIntersecting; if(t._vis && t._dirty) this._fill(t); }); },{rootMargin:'240px 0px'});
+    return this._io;
+  },
+  _fill(t){
+    const p=t._page; if(!p) return; t._dirty=false;
+    const mini=t.querySelector('.bb-thumb-mini'); if(!mini) return;
+    mini.innerHTML=p.content.innerHTML;
+    requestAnimationFrame(()=>{ const w=p.el.clientWidth||794; mini.style.transform='scale('+(t.clientWidth/w)+')'; mini.style.width=w+'px'; mini.style.height=(p.el.clientHeight||1123)+'px'; });
+  },
   render(){
-    const wrap=$('#bb-thumbs'); wrap.innerHTML='';
+    const wrap=$('#bb-thumbs'); const io=this._observer();
+    if(io) io.disconnect();
+    wrap.innerHTML='';
     State.pages.forEach((p,i)=>{
       const t=document.createElement('div'); t.className='bb-thumb'+(i===State.active?' active':'');
-      const mini=document.createElement('div'); mini.className='bb-thumb-mini'; mini.innerHTML=p.content.innerHTML;
+      const mini=document.createElement('div'); mini.className='bb-thumb-mini';
       const lbl=document.createElement('div'); lbl.className='bb-thumb-label'; lbl.textContent=(i+1);
       const del=document.createElement('button'); del.className='bb-thumb-del'; del.type='button'; del.textContent='✕'; del.title='Elimina pagina';
       t.appendChild(mini); t.appendChild(lbl); t.appendChild(del);
-      // scale mini preview to fit thumb width
-      requestAnimationFrame(()=>{ const scale=(t.clientWidth)/(p.el.clientWidth||794); mini.style.transform='scale('+scale+')'; mini.style.width=(p.el.clientWidth||794)+'px'; mini.style.height=((p.el.clientHeight||1123))+'px'; });
-      t.addEventListener('click',(e)=>{ if(e.target===del)return; Pages.focusPage(i); });
-      del.addEventListener('click',(e)=>{ e.stopPropagation(); Pages.deletePage(i); });
+      t._page=p; t._dirty=true; t._vis=false;
+      t.addEventListener('click',(e)=>{ if(e.target===del)return; Pages.focusPage(State.pages.indexOf(t._page)); });
+      del.addEventListener('click',(e)=>{ e.stopPropagation(); Pages.deletePage(State.pages.indexOf(t._page)); });
       wrap.appendChild(t);
+      if(io) io.observe(t); else this._fill(t);
     });
   },
   markActive(){ $$('#bb-thumbs .bb-thumb').forEach((t,i)=>t.classList.toggle('active',i===State.active));
     $('#bb-goto-page').value=State.active+1; },
-  _timers:{},
-  /** Aggiorna la miniatura di UNA sola pagina (clona solo il suo contenuto)
-      invece di ricostruire l'intero elenco come render(): molto più leggero
-      quando ci sono tante pagine, usato per il live-update in scrittura. */
+  /** Segna la miniatura di UNA pagina da rifare (la rifà subito solo se è visibile). */
   updateThumb(i){
     const t=$('#bb-thumbs').children[i]; const p=State.pages[i];
     if(!t||!p) return;
-    const mini=t.querySelector('.bb-thumb-mini'); if(!mini) return;
-    mini.innerHTML=p.content.innerHTML;
-    requestAnimationFrame(()=>{ const scale=(t.clientWidth)/(p.el.clientWidth||794); mini.style.transform='scale('+scale+')'; mini.style.width=(p.el.clientWidth||794)+'px'; mini.style.height=((p.el.clientHeight||1123))+'px'; });
+    t._page=p; t._dirty=true;
+    if(t._vis||!this._io) this._fill(t);
   },
-  /** "Tempo reale" ma con una breve pausa: ricalcolare la miniatura ad ogni
-      singolo carattere digitato sarebbe uno spreco, soprattutto con molte
-      pagine — si aggiorna solo quando l'utente si ferma un istante. */
+  /** "Tempo reale" ma con una pausa: si aggiorna solo quando l'utente si ferma un istante (più lunga se il
+      documento è lungo, perché ogni aggiornamento clona una pagina intera). */
   scheduleUpdate(i){
     clearTimeout(this._timers[i]);
-    this._timers[i]=setTimeout(()=>this.updateThumb(i),350);
+    this._timers[i]=setTimeout(()=>this.updateThumb(i),State.pages.length>20?900:350);
   }
 };
 
@@ -2812,6 +2863,7 @@ const ExportFile = {
       // la carta è sempre bianca: con il tema scuro attivo il PDF usciva quasi nero (testo chiaro su fondo scuro)
       const root=document.documentElement, prevTheme=root.getAttribute('data-theme');
       root.setAttribute('data-theme','light');
+      const scaler=$('#bb-pages-scaler'), prevScale=scaler.style.transform; scaler.style.transform='none';
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
       try{
       for(let i=0;i<State.pages.length;i++){
@@ -2821,7 +2873,7 @@ const ExportFile = {
         if(i>0)pdf.addPage(State.pageSize.toLowerCase(),State.orient);
         pdf.addImage(img,'JPEG',0,0,w,h);
       }
-      } finally { if(prevTheme===null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme',prevTheme); }
+      } finally { scaler.style.transform=prevScale; if(prevTheme===null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme',prevTheme); }
       const blob=pdf.output('blob');
       if(await download(blob,SaveAs.fileName(name)+'.pdf')) toast('PDF esportato','ok');
     }catch(e){ console.error(e); toast('Errore export PDF: '+e.message,'err'); }
@@ -2962,10 +3014,34 @@ const Find = {
 
 /* ======================= ZOOM / THEME ======================= */
 const Zoom = {
-  v:100,
-  set(v){ this.v=Math.max(50,Math.min(200,v)); const s=this.v/100;
+  v:100, mode:'auto', MIN:50, MAX:200, AUTO_MIN:70, AUTO_MAX:150, _raf:0,
+  /** Applica il fattore di scala (non cambia la modalita'). */
+  _apply(v){ this.v=Math.max(this.MIN,Math.min(this.MAX,Math.round(v))); const s=this.v/100;
     $('#bb-pages-scaler').style.transform='scale('+s+')';
     $('#bb-zoom').value=this.v; $('#bb-zoom-val').textContent=this.v+'%'; $('#bb-status-zoom').textContent=this.v+'%'; },
+  /** Zoom scelto dall'utente (cursore, +/-, Reset): resta com'e' finche' non si preme «Adatta». */
+  set(v){ this.mode='manual'; this._save(); this._apply(v); },
+  /** Adatta la pagina alla larghezza della finestra: a schermo intero la pagina si ingrandisce (fino al 150%)
+      invece di restare piccola con grandi bande vuote ai lati; su schermi piccoli si riduce (fino al 70%). */
+  fit(){ this.mode='auto'; this._save(); this.refit(); },
+  refit(){
+    if(this.mode!=='auto') return;
+    const area=$('#bb-editor-area'), pg=State.pages[0]&&State.pages[0].el; if(!area||!pg) return;
+    const cs=getComputedStyle(area), pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+    const avail=area.clientWidth-pad-16, w=pg.offsetWidth; if(avail<=0||!w) return;
+    const z=Math.max(this.AUTO_MIN,Math.min(this.AUTO_MAX,Math.floor(avail/w*100)));
+    if(z!==this.v) this._apply(z);
+  },
+  _schedule(){ if(this._raf) return; this._raf=requestAnimationFrame(()=>{ this._raf=0; Zoom.refit(); }); },
+  _save(){ try{ localStorage.setItem('blabla.zoom',this.mode==='auto'?'auto':String(this.v)); }catch(e){} },
+  load(){ try{ const z=localStorage.getItem('blabla.zoom'); if(z&&z!=='auto'&&isFinite(+z)){ this.mode='manual'; this._apply(+z); return; } }catch(e){} this.mode='auto'; this._apply(100); },
+  init(){
+    this.load();
+    const area=$('#bb-editor-area');
+    if(area&&typeof ResizeObserver!=='undefined') new ResizeObserver(()=>Zoom._schedule()).observe(area);
+    window.addEventListener('resize',()=>Zoom._schedule());
+    this.refit();
+  },
   in(){ this.set(this.v+10); }, out(){ this.set(this.v-10); }, reset(){ this.set(100); }
 };
 const Theme = {
@@ -3664,6 +3740,7 @@ function wire(){
   $('#bb-zoom-in2').addEventListener('click',()=>Zoom.in());
   $('#bb-zoom-out2').addEventListener('click',()=>Zoom.out());
   $('#bb-zoom-reset').addEventListener('click',()=>Zoom.reset());
+  $('#bb-zoom-fit').addEventListener('click',()=>Zoom.fit());
   $('#bb-theme-toggle').addEventListener('click',()=>Theme.toggle());
   $('#bb-theme-toggle2').addEventListener('click',()=>Theme.toggle());
   $('#bb-shortcuts-btn').addEventListener('click',()=>Shortcuts.open());
@@ -3815,7 +3892,7 @@ async function init(){
     State.active=0; Pages.mount();
   }
   History.stack=[]; History.idx=-1; History.snapshot();
-  Stats.update(); Zoom.set(100); status('Pronto');
+  Stats.update(); Zoom.init(); status('Pronto');
   BB.emit('ready');
   setTimeout(()=>Navigator.render(),200);
 }

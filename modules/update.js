@@ -42,7 +42,7 @@ function show(res){
   const cur=current();
   let body;
   if(res&&res.status==='new'){
-    body='<p><b>È disponibile BlaBla '+esc(res.tag.replace(/^v/i,''))+'</b> (hai la '+esc(cur)+').</p>'+(res.notes?'<pre class="bb-upd-notes">'+esc(res.notes)+'</pre>':'')+'<div class="bb-hint">Scarica l\'installatore dalla pagina della release: aggiorna il programma mantenendo documenti e font.</div>';
+    body='<p><b>È disponibile BlaBla '+esc(res.tag.replace(/^v/i,''))+'</b> (hai la '+esc(cur)+').</p>'+(res.notes?'<pre class="bb-upd-notes">'+esc(res.notes)+'</pre>':'')+'<div class="bb-hint">Scarica lo zip dalla pagina della release e sostituisci la cartella di BlaBla: documenti e font restano al loro posto.</div>';
   }else if(res&&res.status==='current'){
     body='<p>Hai già l\'ultima versione ('+esc(cur)+').</p>';
   }else if(res&&res.status==='error'){

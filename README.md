@@ -13,16 +13,13 @@ ribbon con icone vettoriali, pagine A4 multi-pagina con reflow automatico, salva
 | ![Relazione con sommario](docs/03-relazione.png) | ![Interfaccia in inglese](docs/04-english.png) |
 | ![Galleria modelli](docs/02-modelli.png) | ![PDF con originale accanto](docs/05-confronto-pdf.png) |
 
-## Installazione (Windows)
-Scarica dalla pagina [Releases](https://github.com/Huawetto/BlaBla/releases) uno tra:
-- **`BlaBla-Setup-<versione>.exe`** — installatore per utente (non servono i permessi di amministratore):
-  crea i collegamenti, si disinstalla da «App installate». Silenzioso: `BlaBla-Setup.exe /S` (opzioni
-  `/NODESKTOP`, `/D=C:\Cartella`).
-- **`BlaBla-<versione>-portable.zip`** — si scompatta ovunque, si avvia `BlaBla.exe`.
-
-`SHA256SUMS.txt` contiene le impronte per verificare i file. Windows SmartScreen può mostrare «Editore sconosciuto»
-finché gli eseguibili non sono firmati: vedi [docs/SIGNING.md](docs/SIGNING.md). L'app controlla una volta al giorno se
-c'è una versione nuova (solo un avviso, niente si scarica da solo; si spegne da **Aggiornamenti**).
+## Download (Windows)
+Scarica da [Releases](https://github.com/Huawetto/BlaBla/releases) **`BlaBla-<versione>-portable.zip`**: si scompatta
+dove vuoi e si avvia `BlaBla.exe`, senza installazione né permessi di amministratore. Per aggiornare basta sostituire
+la cartella: documenti e font stanno in `%LOCALAPPDATA%\BlaBla` e restano. `SHA256SUMS.txt` contiene l'impronta per
+verificare il file. Windows SmartScreen può mostrare «Editore sconosciuto» finché gli eseguibili non sono firmati:
+vedi [docs/SIGNING.md](docs/SIGNING.md). L'app controlla una volta al giorno se c'è una versione nuova (solo un
+avviso, niente si scarica da solo; si spegne da **Aggiornamenti**).
 
 ## Avvio dal browser
 Fai **doppio clic su `blabla.html`**. Si apre nel browser e funziona anche
@@ -47,9 +44,7 @@ tools/
   fetch-new-fonts.py       Scarica in blocco altre famiglie da Google Fonts (licenza
                            OFL), saltando quelle già presenti.
   launcher.py              Punto d'ingresso dell'app desktop (vedi sotto).
-  build_exe.py/.bat        Crea programma, installatore e zip portatile (vedi sotto).
-  installer.py             Installatore (tkinter) incluso in BlaBla-Setup.exe.
-  uninstaller.py           "Uninstall BlaBla.exe" (solo ctypes).
+  build_exe.py/.bat        Crea il programma e lo zip portatile (vedi sotto).
   make_screenshots.py      Rigenera gli screenshot e la GIF in docs/.
 modules/                   Funzioni aggiunte sopra l'API pubblica `window.BB`: intestazioni/piè di pagina,
                            sommario e note, esportazione DOCX, cronologia versioni, stili e modelli, lingua,
@@ -80,16 +75,17 @@ python tests/e2e/images.py                 (disposizione, didascalie, ritaglio)
 python tests/e2e/pdf_review.py             (confronto PDF, parole dubbie dell'OCR, più PDF insieme)
 python tests/e2e/i18n.py                   (interfaccia inglese senza testi italiani residui)
 python tests/e2e/update.py                 (controllo aggiornamenti, con GitHub simulato)
+python tests/e2e/perf.py                   (tempi e memoria con CPU rallentata: documento di 56 pagine)
 
 pip install -r requirements-build.txt      (solo per creare l'exe)
-python tools/build_exe.py                  -> dist/BlaBla/ (programma), BlaBla-Setup-<ver>.exe,
-                                              BlaBla-<ver>-portable.zip, SHA256SUMS.txt
+python tools/build_exe.py                  -> dist/BlaBla/ (programma), BlaBla-<ver>-portable.zip,
+                                              SHA256SUMS.txt
 python tools/make_screenshots.py           (rigenera docs/*.png e docs/demo.gif)
 ```
 **Pubblicare su GitHub:** il repository contiene il sorgente (circa 60 MB tra `vendor/` e `fonts/`); gli
 eseguibili (`dist/`) NON vanno nel repository ma come file allegati di una **Release**. Pubblicando un tag
 `vX.Y.Z` il workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) costruisce e allega
-installatore, zip portatile e impronte (e, se configurato, firma con SignPath: vedi [docs/SIGNING.md](docs/SIGNING.md)).
+lo zip portatile e le impronte.
 La versione dell'app sta in un solo posto: [`modules/version.js`](modules/version.js).
 
 ## Licenza
@@ -184,7 +180,7 @@ un foglio stampato).
 - **PDF**: pannello con la pagina originale accanto al testo, parole dubbie dell'OCR evidenziate (F8 per scorrerle),
   apertura di più PDF insieme.
 - **Interfaccia in inglese** (pulsante IT/EN nella barra in alto).
-- **Controllo aggiornamenti**, installatore e disinstallatore, avvio rapido.
+- **Controllo aggiornamenti** e avvio rapido (programma a cartella).
 
 ## Funzionalità principali
 - **Seleziona tutto (Ctrl+A)** vale per l'INTERO documento: Ctrl+C/Ctrl+X copiano/tagliano tutte le pagine,

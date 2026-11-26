@@ -3,7 +3,6 @@ BlaBla — crea i pacchetti per Windows:
 
     dist/BlaBla/                       programma "a cartella" (si avvia in un attimo: niente estrazione a ogni apertura)
     dist/BlaBla-<ver>-portable.zip     la stessa cartella compressa: si scompatta ovunque e si usa
-    dist/BlaBla-Setup-<ver>.exe        installatore (per-utente, senza amministratore) con disinstallatore
     dist/SHA256SUMS.txt                impronte dei file da pubblicare, per verificarli
 
 Il programma include tutta l'app (HTML/CSS/JS, font, e — scaricate da questo script se mancano in vendor/ — le
@@ -16,7 +15,7 @@ USO
 
 Serve internet SOLO per questo script (installare PyInstaller/pywebview e scaricare vendor/ mancante).
 Se ci sono i certificati di firma (variabile BB_SIGN_PFX + BB_SIGN_PASSWORD) gli .exe vengono firmati con signtool;
-la firma "gratuita" con SignPath si fa dal workflow GitHub (vedi .github/workflows/release.yml e docs/SIGNING.md).
+per la firma con certificato proprio vedi docs/SIGNING.md.
 """
 import hashlib
 import os
@@ -237,7 +236,6 @@ def main():
     dist = os.path.join(ROOT, "dist")
     os.makedirs(dist, exist_ok=True)
     sep = ";" if os.name == "nt" else ":"
-    light = ("unittest", "pydoc_data", "xml", "email")
     # il Python di sviluppo puo' avere installate molte altre librerie: PyInstaller le raccoglierebbe se
     # qualche hook le trova. Il programma usa solo pywebview (WinForms/WebView2 via pythonnet).
     stray = ("PyQt5", "PyQt6", "PySide2", "PySide6", "kivy", "pygame", "cv2", "numpy", "scipy", "pandas", "matplotlib", "gevent",
@@ -247,44 +245,24 @@ def main():
     # 1) il programma, a cartella
     app = pyinstaller(["--add-data", STAGE_DIR + sep + "app", os.path.join(ROOT, "tools", "launcher.py")], "BlaBla", False,
                       version_file=vinfo, excludes=stray)
-    # 2) disinstallatore (un exe piccolo, senza tkinter: usa solo ctypes)
-    unins = pyinstaller([os.path.join(ROOT, "tools", "uninstaller.py")], "Uninstall BlaBla", True, version_file=vinfo,
-                        excludes=light + ("tkinter", "http"))
-    shutil.copy2(unins, os.path.join(app, "Uninstall BlaBla.exe"))
     sign(os.path.join(app, "BlaBla.exe"))
-    sign(os.path.join(app, "Uninstall BlaBla.exe"))
 
     final = os.path.join(dist, "BlaBla")
     if os.path.exists(final):
         shutil.rmtree(final)
     shutil.copytree(app, final)
 
-    # 3) zip portatile e payload dell'installatore
+    # 2) zip portatile
     portable = os.path.join(dist, "BlaBla-%s-portable.zip" % version)
     zip_folder(final, portable, prefix="BlaBla/")
-    payload = os.path.join(BUILD_DIR, "payload.zip")
-    zip_folder(final, payload)
-    meta = os.path.join(BUILD_DIR, "payload.meta")
-    with open(meta, "w", encoding="utf-8") as f:
-        f.write("version=%s\n" % version)
 
-    # 4) installatore
-    setup = pyinstaller(["--add-data", payload + sep + ".", "--add-data", meta + sep + ".",
-                         "--add-data", os.path.join(ROOT, "assets", "icon.ico") + sep + ".",
-                         os.path.join(ROOT, "tools", "installer.py")], "BlaBla-Setup", True, version_file=vinfo,
-                        excludes=light)
-    sign(setup)
-    setup_final = os.path.join(dist, "BlaBla-Setup-%s.exe" % version)
-    shutil.copy2(setup, setup_final)
-
-    # 5) impronte
-    lines = ["%s  %s" % (sha256(p), os.path.basename(p)) for p in (setup_final, portable)]
+    # 3) impronte
     with open(os.path.join(dist, "SHA256SUMS.txt"), "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+        f.write("%s  %s\n" % (sha256(portable), os.path.basename(portable)))
     log("Fatto (versione %s):" % version)
-    for p in (final, portable, setup_final):
+    for p in (final, portable):
         log("  " + p)
-    log("Per pubblicare: allega alla release di GitHub il Setup, lo zip portatile e SHA256SUMS.txt.")
+    log("Per pubblicare: allega alla release di GitHub lo zip portatile e SHA256SUMS.txt.")
 
 
 if __name__ == "__main__":

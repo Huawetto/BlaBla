@@ -1623,7 +1623,8 @@ const OcrPool={
       w.__psm='6';
       return w;
     };
-    const n=U.clamp((navigator.hardwareConcurrency||4)-1,1,3);
+    // ogni worker tiene in memoria i modelli lingua (~100 MB): con poca RAM meno worker, anche se piu' lenti
+    const mem=navigator.deviceMemory||8, n=U.clamp(Math.min((navigator.hardwareConcurrency||4)-1,mem<=4?1:(mem<=8?2:3)),1,3);
     const workers=await Promise.all(Array.from({length:n},mk));
     const free=workers.slice(), q=[];
     const pump=()=>{

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.1 — 2026-11-26
+Prestazioni sui PC deboli o vecchi, e finestra a schermo intero.
+- **Scrittura molto piu' fluida nei documenti lunghi** (circa 20 volte meno lavoro per tasto in un documento di 56 pagine
+  su un PC lento): le miniature del navigatore si creano solo quando sono visibili, le pagine sono isolate fra loro per
+  il motore di impaginazione, il conteggio di parole/righe e la posizione del cursore si aggiornano a gruppi.
+- **Molta meno memoria**: la cronologia annulla/ripeti tiene le immagini una volta sola (con foto grandi si passava da
+  centinaia di MB a pochi), conserva meno passi nei documenti pesanti; il salvataggio automatico non duplica piu' il
+  documento nell'archivio del browser quando lo scrive gia' su file; l'OCR usa meno processi con poca RAM.
+- **Avvio senza copia dei file**: l'app non copia piu' ~200 MB in `%LOCALAPPDATA%\BlaBla` (serviva spazio libero sul disco
+  e tempo ad ogni aggiornamento): resta li' solo cio' che e' dell'utente (documento, font creati o aggiunti). La copia
+  vecchia viene tolta automaticamente.
+- **Modalita' a basso consumo** di WebView2 sui PC con 8 GB di RAM o meno (disattivabile con la variabile
+  `BLABLA_FULL_POWER=1`).
+- **Schermo intero**: la pagina si adatta alla larghezza della finestra (fino al 150%, e si riduce su schermi piccoli);
+  nuovo pulsante **Adatta** in Visualizza. Se scegli uno zoom a mano resta quello.
+- Tolti l'installatore e il disinstallatore: resta lo zip portatile (si aggiorna sostituendo la cartella).
+
 ## 1.1.0 — 2026-11-13
 **Documenti**
 - Intestazioni, piè di pagina e numeri di pagina; sommario automatico; note a piè di pagina.

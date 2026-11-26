@@ -1,8 +1,8 @@
 name: Release
 
-# Si avvia quando pubblichi un tag di versione (es. v1.1.0): costruisce l'installatore, lo zip portatile e le
+# Si avvia quando pubblichi un tag di versione (es. v1.1.0): costruisce lo zip portatile e le
 # impronte SHA-256 e li allega alla release di GitHub.
-# Firma digitale (facoltativa): vedi docs/SIGNING.md. Senza i segreti indicati il passaggio di firma viene saltato.
+# Gli eseguibili non sono firmati: vedi docs/SIGNING.md.
 on:
   push:
     tags: ["v*"]
@@ -33,45 +33,14 @@ jobs:
           $v = (Select-String -Path modules/version.js -Pattern 'BB_VERSION="([^"]+)"').Matches[0].Groups[1].Value
           if ("v$v" -ne "${{ github.ref_name }}") { throw "Il tag ${{ github.ref_name }} non coincide con modules/version.js ($v)" }
 
-      - name: Build (programma, installatore, zip portatile)
+      - name: Build (programma e zip portatile)
         run: python tools/build_exe.py
-
-      # --- firma con SignPath (https://signpath.org/): richiede il progetto approvato e questi segreti/variabili ---
-      - name: Carica l'installatore per la firma
-        id: upload-unsigned
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned
-          path: dist/BlaBla-Setup-*.exe
-
-      - name: Firma con SignPath
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed
-
-      - name: Sostituisci con l'installatore firmato e ricalcola le impronte
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        shell: pwsh
-        run: |
-          Copy-Item signed\BlaBla-Setup-*.exe dist\ -Force
-          Get-ChildItem dist\BlaBla-Setup-*.exe, dist\BlaBla-*-portable.zip |
-            ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
-            Set-Content dist\SHA256SUMS.txt -Encoding utf8
 
       - name: Pubblica la release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/BlaBla-Setup-*.exe
             dist/BlaBla-*-portable.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true
@@ -81,6 +50,5 @@ jobs:
         with:
           name: BlaBla-build
           path: |
-            dist/BlaBla-Setup-*.exe
             dist/BlaBla-*-portable.zip
             dist/SHA256SUMS.txt

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 — 2026-11-26
+**Spartiti.** I PDF di musica (da programmi di notazione o scansionati) non vengono piu' letti come testo senza senso.
+- Si riconoscono i **pentagrammi** (cinque righe sottili equidistanti) e si raggruppano in **sistemi** (le righe unite dalla
+  stanghetta: coro + pianoforte, ecc.).
+- Ogni sistema diventa una **immagine nitida** con cio' che gli sta attorno: nomi degli strumenti, testo cantato, accordi,
+  dinamiche, indicazioni di tempo.
+- Fuori dai sistemi il testo resta **testo vero e modificabile**: titolo, autore, note, diritti a fondo pagina.
+- Funziona sia con PDF vettoriali (testo incorporato) sia con **scansioni** (anche leggermente storte): sulle scansioni i
+  sistemi si cancellano dalla pagina prima dell'OCR, cosi' non genera lettere inventate dalle note.
+- Non e' un riconoscimento delle note (OMR): la musica resta un'immagine, non un file MusicXML/MIDI.
+
 ## 1.1.1 — 2026-11-26
 Prestazioni sui PC deboli o vecchi, e finestra a schermo intero.
 - **Scrittura molto piu' fluida nei documenti lunghi** (circa 20 volte meno lavoro per tasto in un documento di 56 pagine

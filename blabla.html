@@ -2443,7 +2443,7 @@ const PdfMedia = {
         let model=null;
         try{
           if(rawText.length>=OCR.TEXT_MIN_LEN){
-            model=await PdfEngine.Analyze.vector(page,{tc});
+            model=await PdfEngine.Analyze.vector(page,{tc,pageNo:i});
             // pagina-immagine con un po' di testo vero (intestazione/piè di pagina):
             // il contenuto vero è nell'immagine, serve l'OCR
             if(model.fullPageImage && (model.textChars<150 || model.needsRaster)) model=null;
@@ -2455,7 +2455,7 @@ const PdfMedia = {
               await loadLib('tesseract');
               ocr=await PdfEngine.OcrPool.create({});
             }
-            model=await PdfEngine.Analyze.raster(page,ocr,{state:ocrState,onProgress:(d,t)=>setLoadingSub(pre+'OCR pagina '+i+'/'+pdf.numPages+' — '+d+'/'+t)});
+            model=await PdfEngine.Analyze.raster(page,ocr,{state:ocrState,pageNo:i,onProgress:(d,t)=>setLoadingSub(pre+'OCR pagina '+i+'/'+pdf.numPages+' — '+d+'/'+t)});
             st.ocrPages++;
           }
         }catch(err){
@@ -2464,7 +2464,7 @@ const PdfMedia = {
           console.warn('Analisi pagina '+i+' non riuscita, inserita come immagine',err);
           model=await PdfEngine.Analyze.pageAsFigure(page); st.failed=(st.failed||0)+1;
         }
-        st.tables+=model.stats.tables; st.figures+=model.stats.figures;
+        st.tables+=model.stats.tables; st.figures+=model.stats.figures; st.scores=(st.scores||0)+(model.scoreSystems||0);
         models.push(model);
       }
      }
@@ -2740,6 +2740,7 @@ const Importer = {
       const parts=[(many?files.length+' PDF, ':'')+pagesHtml.length+' pagine importate'];
       if(stats.ocrPages) parts.push(stats.ocrPages+' via OCR (nessun testo incorporato)');
       if(stats.tables) parts.push(stats.tables+' tabelle');
+      if(stats.scores) parts.push(stats.scores+' sistemi musicali (spartito) come immagini');
       if(stats.figures) parts.push(stats.figures+' figure');
       toast(parts.join(', '),'ok');
       BB.emit('pdfImported',{pdfs,pageRefs,names:files.map(f=>f.name),stats});
@@ -2804,6 +2805,7 @@ const OCR = {
       if(textPages) parts.push(textPages+' con testo diretto');
       if(ocrPages) parts.push(ocrPages+' via OCR');
       if(stats.tables) parts.push(stats.tables+' tabelle');
+      if(stats.scores) parts.push(stats.scores+' sistemi musicali (spartito) come immagini');
       if(stats.figures) parts.push(stats.figures+' figure');
       toast(parts.join(', '),'ok');
       BB.emit('pdfImported',{pdfs:[pdf],pageRefs,names:[file.name],stats});

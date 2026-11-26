@@ -75,6 +75,7 @@ python tests/e2e/images.py                 (disposizione, didascalie, ritaglio)
 python tests/e2e/pdf_review.py             (confronto PDF, parole dubbie dell'OCR, più PDF insieme)
 python tests/e2e/i18n.py                   (interfaccia inglese senza testi italiani residui)
 python tests/e2e/update.py                 (controllo aggiornamenti, con GitHub simulato)
+python tests/e2e/score.py                  (spartiti: sistemi musicali come immagini, testo fuori dai sistemi)
 python tests/e2e/perf.py                   (tempi e memoria con CPU rallentata: documento di 56 pagine)
 
 pip install -r requirements-build.txt      (solo per creare l'exe)
@@ -179,6 +180,7 @@ un foglio stampato).
 - **Lingua del documento e correttore ortografico** a scelta.
 - **PDF**: pannello con la pagina originale accanto al testo, parole dubbie dell'OCR evidenziate (F8 per scorrerle),
   apertura di più PDF insieme.
+- **Spartiti** (1.2): i PDF di musica diventano immagini nitide dei sistemi musicali, con titolo e note come testo.
 - **Interfaccia in inglese** (pulsante IT/EN nella barra in alto).
 - **Controllo aggiornamenti** e avvio rapido (programma a cartella).
 

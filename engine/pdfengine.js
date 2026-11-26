@@ -1079,6 +1079,221 @@ function sampleBg(src,cell,scale){
   return [Math.round(mr),Math.round(mg),Math.round(mb)];
 }
 
+/* ===========================================================================
+   SPARTITI
+   Un PDF di musica non e' testo: i pentagrammi sono righe, le note glifi di un font musicale (che letti come testo
+   diventano caratteri senza senso). Qui si riconoscono i pentagrammi (5 righe sottili equidistanti), si raggruppano
+   in SISTEMI (le righe unite dalla stanghetta a sinistra: coro + pianoforte, ecc.) e ogni sistema si ritaglia come
+   IMMAGINE nitida, con cio' che ci sta attorno (nomi degli strumenti, testo cantato, accordi, dinamiche). Fuori dai
+   sistemi il testo resta testo vero: titolo, autore, note, diritti.
+   =========================================================================== */
+const Score={
+  /** Pentagrammi: cinque righe sottili, equidistanti (2-11 pt), della stessa estensione. `h`: righe orizzontali
+      {a,t,s0,s1} in punti. `loose`: tolleranze piu' larghe (scansioni). */
+  staves(h,W,loose){
+    const minLen=Math.max(80,0.2*W);
+    // le righe disegnate misura per misura si riuniscono in una sola
+    let L=h.filter(l=>l.t<=(loose?2.4:1.7));
+    L=Geo.mergeCollinear(L,loose?0.9:0.45,loose?8:5).filter(l=>l.s1-l.s0>=minLen);
+    // righe corte accanto al pentagramma (codette, battute ritmiche) non sono righe del pentagramma
+    const longest=Math.max(0,...L.map(l=>l.s1-l.s0));
+    L=L.filter(l=>l.s1-l.s0>=0.4*longest).sort((p,q)=>p.a-q.a);
+    const M=[];
+    L.forEach(l=>{
+      const p=M[M.length-1];
+      if(p&&Math.abs(p.a-l.a)<(loose?0.9:0.45)&&Math.abs(p.s0-l.s0)<6&&Math.abs(p.s1-l.s1)<6){ p.s0=Math.min(p.s0,l.s0); p.s1=Math.max(p.s1,l.s1); }
+      else M.push({a:l.a,t:l.t,s0:l.s0,s1:l.s1});
+    });
+    const out=[]; let i=0;
+    while(i+4<M.length){
+      const g=M.slice(i,i+5), d=[1,2,3,4].map(k=>g[k].a-g[k-1].a), sp=(d[0]+d[1]+d[2]+d[3])/4;
+      const tol=(loose?0.22:0.12)*sp+0.35;
+      const x0=Math.min(...g.map(l=>l.s0)), x1=Math.max(...g.map(l=>l.s1));
+      const okSp=sp>=2.2&&sp<=11&&d.every(x=>Math.abs(x-sp)<=tol);
+      const okX=g.every(l=>Math.abs(l.s0-x0)<=Math.max(5,0.9*sp)&&Math.abs(l.s1-x1)<=Math.max(5,0.9*sp));
+      if(okSp&&okX){ out.push({x0,x1,y0:g[0].a,y1:g[4].a,sp}); i+=5; } else i++;
+    }
+    return out;
+  },
+  /** Raggruppa i pentagrammi in sistemi: due pentagrammi consecutivi sono dello stesso sistema se una
+      linea verticale a sinistra (la stanghetta di sistema) copre lo spazio tra i due. Senza stanghette
+      (pagine strane) si usa la distanza. */
+  systems(st,v){
+    st=st.slice().sort((p,q)=>p.y0-q.y0);
+    if(!st.length) return [];
+    const linked=(a,b)=>{
+      const xs=Math.min(a.x0,b.x0), tol=Math.max(6,2.2*a.sp);
+      return v.some(l=>Math.abs(l.a-xs)<=tol && l.s0<=a.y1+0.8*a.sp && l.s1>=b.y0-0.8*a.sp);
+    };
+    let any=false; for(let k=0;k+1<st.length;k++) if(linked(st[k],st[k+1])){ any=true; break; }
+    const same=(a,b)=>any? linked(a,b) : (b.y0-a.y1)<=2.4*(a.y1-a.y0);
+    const systems=[]; let cur=[st[0]];
+    for(let k=1;k<st.length;k++){ if(same(st[k-1],st[k])) cur.push(st[k]); else { systems.push(cur); cur=[st[k]]; } }
+    systems.push(cur);
+    return systems.map(g=>({staves:g,x0:Math.min(...g.map(s=>s.x0)),x1:Math.max(...g.map(s=>s.x1)),y0:g[0].y0,y1:g[g.length-1].y1,sp:g[0].sp}));
+  },
+  /** Rettangolo (in punti) di ogni sistema, esteso a tutto cio' che gli appartiene: si risale/scende dal
+      pentagramma finche' c'e' inchiostro continuo e ci si ferma al primo vuoto netto (cosi' titolo e note a
+      fondo pagina restano fuori); lo spazio tra due sistemi vicini si divide nel punto piu' vuoto. */
+  bands(systems,g,scale,items){
+    const {w,h,gray,thr}=g;
+    const ink=v=>v<thr+25;
+    const sp=systems.reduce((a,s)=>a+s.sp,0)/systems.length;
+    const X0=Math.max(0,Math.floor((Math.min(...systems.map(s=>s.x0))-70)*scale)), X1=Math.min(w,Math.ceil((Math.max(...systems.map(s=>s.x1))+16)*scale));
+    const tol=Math.max(1,Math.round(0.006*(X1-X0)));   // qualche puntino di scansione non rompe un vuoto
+    const row=new Int32Array(h);
+    for(let y=0;y<h;y++){ let n=0; const o=y*w; for(let x=X0;x<X1;x++) if(ink(gray[o+x])) n++; row[y]=n; }
+    const px=v=>Math.max(0,Math.min(h-1,Math.round(v*scale)));
+    const R=Math.max(3,Math.round(1.6*sp*scale));
+    const tops=systems.map(s=>px(s.y0)), bots=systems.map(s=>px(s.y1));
+    // punto di divisione tra due sistemi: il vuoto piu' largo (o la riga con meno inchiostro)
+    const cutBetween=(a,b)=>{
+      let best=-1,bs=0,bl=0,run=0,st=a;
+      for(let y=a;y<=b;y++){
+        if(row[y]<=tol){ if(!run) st=y; run++; if(run>bl){ bl=run; bs=st; } } else run=0;
+      }
+      if(bl>=2) return bs+(bl>>1);
+      let mn=1e9; for(let y=a;y<=b;y++) if(row[y]<mn){ mn=row[y]; best=y; }
+      return best<0?((a+b)>>1):best;
+    };
+    const rects=systems.map((s,k)=>{
+      const limUp=k>0?cutBetween(bots[k-1],tops[k]):Math.max(0,tops[k]-px(10*sp));
+      const limDn=k+1<systems.length?cutBetween(bots[k],tops[k+1]):Math.min(h-1,bots[k]+px(15*sp));
+      let top=tops[k], run=0;
+      for(let y=tops[k]-1;y>=limUp;y--){ if(row[y]<=tol){ run++; if(run>=R){ top=y+run-1; break; } } else { run=0; top=y; } }
+      let bot=bots[k]; run=0;
+      for(let y=bots[k]+1;y<=limDn;y++){ if(row[y]<=tol){ run++; if(run>=R){ bot=y-run+1; break; } } else { run=0; bot=y; } }
+      // estensione orizzontale sulle righe trovate: a sinistra i nomi degli strumenti, a destra la coda
+      const col=new Int32Array(w);
+      for(let y=top;y<=bot;y++){ const o=y*w; for(let x=0;x<w;x++) if(ink(gray[o+x])) col[x]++; }
+      const Cn=Math.max(3,Math.round(2.4*sp*scale));
+      let left=Math.round(s.x0*scale); run=0;
+      for(let x=left-1;x>=Math.max(0,Math.round((s.x0-70)*scale));x--){ if(col[x]<=1){ run++; if(run>=Cn){ left=x+run-1; break; } } else { run=0; left=x; } }
+      let right=Math.round(s.x1*scale); run=0;
+      for(let x=right+1;x<=Math.min(w-1,Math.round((s.x1+16)*scale));x++){ if(col[x]<=1){ run++; if(run>=Cn){ right=x-run+1; break; } } else { run=0; right=x; } }
+      // nomi degli strumenti e numeri di battuta a sinistra, anche se separati dal pentagramma da uno spazio
+      (items||[]).forEach(it=>{
+        const cy=(it.y0+it.y1)/2;
+        if(cy>=top/scale-1&&cy<=bot/scale+1&&it.x1<=s.x0+2&&it.x0>=s.x0-95) left=Math.min(left,Math.floor(it.x0*scale));
+      });
+      const pad=2.2;
+      return {x0:Math.max(0,left/scale-pad),y0:Math.max(0,top/scale-pad),x1:Math.min(w/scale,(right+1)/scale+pad),y1:Math.min(h/scale,(bot+1)/scale+pad),staves:s.staves.length};
+    });
+    // le bande non devono sovrapporsi
+    for(let k=1;k<rects.length;k++){ if(rects[k].y0<rects[k-1].y1){ const m=(rects[k].y0+rects[k-1].y1)/2; rects[k].y0=m; rects[k-1].y1=m; } }
+    return rects;
+  },
+  /** Ritaglio nitido (JPEG su fondo bianco: leggero ma senza sbavature visibili sulle righe). */
+  crop(canvas,r,scale){
+    const sx=Math.max(0,Math.floor(r.x0*scale)), sy=Math.max(0,Math.floor(r.y0*scale));
+    const sw=Math.min(canvas.width-sx,Math.ceil((r.x1-r.x0)*scale)), sh=Math.min(canvas.height-sy,Math.ceil((r.y1-r.y0)*scale));
+    if(sw<4||sh<4) return null;
+    const k=Math.min(1,1400/sw);
+    const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(sw*k)); c.height=Math.max(1,Math.round(sh*k));
+    const cx=c.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,c.width,c.height);
+    cx.imageSmoothingQuality='high'; cx.drawImage(canvas,sx,sy,sw,sh,0,0,c.width,c.height);
+    return c;
+  },
+  /** Figure (una per sistema) dai rettangoli trovati. */
+  figures(canvas,rects,scale,pageNo){
+    const out=[];
+    rects.forEach((r,i)=>{
+      const c=this.crop(canvas,r,scale); if(!c) return;
+      out.push({x0:r.x0,y0:r.y0,x1:r.x1,y1:r.y1,dataUrl:c.toDataURL('image/jpeg',0.86),emb:true,score:true,
+        alt:'Spartito: sistema '+(i+1)+' di '+rects.length+(pageNo?' (pagina '+pageNo+')':'')});
+    });
+    return out;
+  },
+  /** Pentagrammi su un'immagine (scansione): le righe si cercano con la proiezione orizzontale dell'inchiostro, che
+      regge anche quando note e gambi interrompono le righe (cosa che fa fallire il rilevamento di linee intere). */
+  stavesFromGray(g,scale){
+    const {w,h,gray,thr}=g, T=thr+10;
+    // per ogni riga: somma delle lunghezze dei tratti d'inchiostro LUNGHI (le righe del pentagramma); il testo, anche
+    // in grassetto, ha tratti corti e non conta
+    const minRun=Math.max(Math.round(8*scale),Math.round(0.04*w));
+    const row=new Float32Array(h); let mx=0;
+    for(let y=0;y<h;y++){
+      const o=y*w; let n=0, st=-1, last=-1;
+      for(let x=0;x<=w;x++){
+        if(x<w&&gray[o+x]<T){ if(st<0) st=x; last=x; }
+        else if(st>=0&&(x>=w||x-last>2)){ if(last-st+1>=minRun) n+=last-st+1; st=-1; }
+      }
+      row[y]=n; if(n>mx) mx=n;
+    }
+    if(mx<0.25*w) return [];
+    const lim=0.55*mx, centers=[]; let st=-1, last=-1;
+    for(let y=0;y<=h;y++){
+      if(y<h&&row[y]>=lim){ if(st<0) st=y; last=y; }
+      else if(st>=0&&(y>=h||y-last>1)){ centers.push((st+last)/2); st=-1; }
+    }
+    const out=[]; let i=0;
+    while(i+4<centers.length){
+      const c=centers.slice(i,i+5), d=[1,2,3,4].map(k=>c[k]-c[k-1]), sp=(d[0]+d[1]+d[2]+d[3])/4;
+      if(sp>=2.2*scale&&sp<=11*scale&&d.every(x=>Math.abs(x-sp)<=0.2*sp+0.4*scale)){
+        // estensione: colonne con inchiostro su almeno 3 delle 5 righe
+        const cols=new Uint8Array(w);
+        for(const cy of c){ const y0=Math.max(0,Math.round(cy)-1), y1=Math.min(h-1,Math.round(cy)+1);
+          for(let x=0;x<w;x++){ let hit=0; for(let y=y0;y<=y1;y++) if(gray[y*w+x]<T){ hit=1; break; } cols[x]+=hit; } }
+        let x0=-1,x1=-1,run=0,bestLen=0,bs=-1,be=-1,cs=-1;
+        const gap=Math.round(3*sp);
+        for(let x=0;x<w;x++){
+          if(cols[x]>=3){ if(cs<0) cs=x; run=0; be=x; }
+          else if(cs>=0){ run++; if(run>gap){ if(be-cs>bestLen){ bestLen=be-cs; bs=cs; x1=be; } cs=-1; } }
+        }
+        if(cs>=0&&be-cs>bestLen){ bestLen=be-cs; bs=cs; x1=be; }
+        x0=bs;
+        if(x0>=0&&bestLen>=0.2*w){ out.push({x0:x0/scale,x1:x1/scale,y0:c[0]/scale,y1:c[4]/scale,sp:sp/scale}); i+=5; continue; }
+      }
+      i++;
+    }
+    return out;
+  },
+  /** Raggruppa pentagrammi di un'immagine: stesso sistema se la stanghetta di sinistra e' inchiostro continuo nello spazio tra i due. */
+  systemsFromGray(st,g,scale){
+    const {w,gray,thr}=g, T=thr+10, v=[];
+    for(let k=0;k+1<st.length;k++){
+      const a=st[k], b=st[k+1], y0=Math.round(a.y1*scale)+1, y1=Math.round(b.y0*scale)-1; if(y1-y0<3) continue;
+      const xc=Math.round(Math.min(a.x0,b.x0)*scale), r=Math.max(3,Math.round(1.2*a.sp*scale));
+      let ok=false;
+      for(let x=Math.max(0,xc-r);x<=Math.min(w-1,xc+r)&&!ok;x++){
+        let n=0; for(let y=y0;y<=y1;y++) if(gray[y*g.w+x]<T) n++;
+        if(n>=0.85*(y1-y0+1)) ok=true;
+      }
+      if(ok) v.push({a:Math.min(a.x0,b.x0),t:1,s0:a.y0,s1:b.y1});
+    }
+    return this.systems(st,v);
+  },
+  /** Copia dell'immagine con i sistemi musicali cancellati (bianco): su questa si fa l'OCR del testo vero. */
+  mask(canvas,rects,scale){
+    const m=document.createElement('canvas'); m.width=canvas.width; m.height=canvas.height;
+    const mx=m.getContext('2d',{willReadFrequently:true}); mx.drawImage(canvas,0,0); mx.fillStyle='#fff';
+    rects.forEach(r=>mx.fillRect(Math.floor(r.x0*scale)-1,Math.floor(r.y0*scale)-1,Math.ceil((r.x1-r.x0)*scale)+2,Math.ceil((r.y1-r.y0)*scale)+2));
+    return m;
+  },
+  /** Spartito riconosciuto su un'immagine (pagina scansionata): ritorna {rects,canvas} oppure null. Se la
+      pagina e' leggermente storta (le righe del pentagramma devono essere dritte per essere trovate) si prova a
+      raddrizzarla di pochi gradi su una copia ridotta, poi si usa l'angolo trovato sull'immagine intera: in quel
+      caso `canvas` e' l'immagine raddrizzata, da usare al posto dell'originale. */
+  fromCanvas(canvas,scale){
+    const full=(cv,angle)=>{
+      const g=Raster.gray(cv), st=this.stavesFromGray(g,scale);
+      if(st.length<2) return null;
+      const systems=this.systemsFromGray(st,g,scale);
+      return {rects:this.bands(systems,g,scale),staves:st.length,canvas:cv,angle:angle||0};
+    };
+    const sw=Math.min(canvas.width,900), k=sw/canvas.width;
+    const small=document.createElement('canvas'); small.width=sw; small.height=Math.max(1,Math.round(canvas.height*k));
+    const sx=small.getContext('2d',{willReadFrequently:true}); sx.fillStyle='#fff'; sx.fillRect(0,0,small.width,small.height);
+    sx.imageSmoothingQuality='high'; sx.drawImage(canvas,0,0,small.width,small.height);
+    const quick=(cv)=>this.stavesFromGray(Raster.gray(cv),scale*k).length>=2;
+    if(quick(small)) return full(canvas,0);
+    for(const a of [0.5,-0.5,0.25,-0.25,0.75,-0.75,1,-1,1.5,-1.5]){
+      if(quick(transformCanvas(small,0,a))){ const r=full(transformCanvas(canvas,0,a),a); if(r) return r; }
+    }
+    return null;
+  }
+};
+
 const Analyze={
   /** Costruisce il modello della pagina (blocchi in ordine di lettura). */
   buildModel(ctx){
@@ -1170,6 +1385,12 @@ const Analyze={
     if(items.dropped>=6 && items.dropped>items.length){
       const m=await this.pageAsFigure(page); m.rotatedPage=true; return m;
     }
+    // spartito: pentagrammi riconosciuti -> ogni sistema diventa un'immagine, il testo fuori resta testo
+    const staves=Score.staves(vs.h,W,false);
+    if(staves.length>=2){
+      const m=await this.score(page,vs,items,staves,opt);
+      if(m) return m;
+    }
     const fullImg=vs.images.find(r=>(r.x1-r.x0)*(r.y1-r.y0)>=0.8*pageArea);
     let canvas=null, scale=0;
     const needRender=!!fullImg || vs.images.length>0 || vs.complex>0;
@@ -1246,6 +1467,26 @@ const Analyze={
     const model=this.buildModel({W,H,items:flowItems,tables,figures,fills:vs.fills,mode:'vector',scale,canvas});
     model.fullPageImage=!!fullImg;
     model.textChars=items.reduce((n,i)=>n+i.s.length,0);
+    return model;
+  },
+
+  /** Pagina di musica con livello di testo (PDF vettoriale da programma di notazione). */
+  async score(page,vs,items,staves,opt){
+    const W=vs.W, H=vs.H;
+    const scale=U.clamp(2800/Math.max(W,H),1.5,4);
+    const vp2=page.getViewport({scale});
+    const canvas=document.createElement('canvas'); canvas.width=Math.round(vp2.width); canvas.height=Math.round(vp2.height);
+    await page.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:vp2}).promise;
+    const g=Raster.gray(canvas);
+    const systems=Score.systems(staves,vs.v);
+    const rects=Score.bands(systems,g,scale,items);
+    const figures=Score.figures(canvas,rects,scale,opt&&opt.pageNo);
+    if(!figures.length) return null;
+    const inBand=it=>{ const cx=(it.x0+it.x1)/2, cy=(it.y0+it.y1)/2; return rects.some(r=>cx>=r.x0&&cx<=r.x1&&cy>=r.y0&&cy<=r.y1); };
+    const flow=items.filter(it=>!inBand(it)); flow.dropped=items.dropped;
+    const model=this.buildModel({W,H,items:flow,tables:[],figures,fills:null,mode:'vector',scale,canvas:null});
+    model.textChars=flow.reduce((n,i)=>n+i.s.length,0)+200;
+    model.scoreSystems=figures.length; model.score=true;
     return model;
   },
 
@@ -1403,12 +1644,19 @@ const Analyze={
     if(!ori.rot90 && st.flip) quarter=2;
     if(quarter){ pc=transformCanvas(pc,quarter,0); ori=Raster.orientation(Raster.gray(pc)); }
     skew=Math.abs(ori.angle)>=0.15 && !ori.rot90 ? ori.angle : 0;
-    const pcFix=(quarter||skew)?transformCanvas(pc,0,skew):pc;
+    let pcFix=(quarter||skew)?transformCanvas(pc,0,skew):pc;
+    // spartito scansionato: i sistemi musicali si ritagliano come immagini e si cancellano dalla pagina, cosi' l'OCR
+    // legge solo il testo vero (titolo, autore, note) invece di inventare lettere dalle note
+    let scoreInfo=null, scoreAngle=0;
+    try{
+      scoreInfo=Score.fromCanvas(pcFix,sp);
+      if(scoreInfo&&scoreInfo.rects.length){ scoreAngle=scoreInfo.angle||0; pcFix=scoreInfo.canvas; } else scoreInfo=null;
+    }catch(err){ console.warn('Riconoscimento spartito non riuscito',err); scoreInfo=null; }
     const rotated=quarter%2===1;
     const W1=rotated?H0:W0, H1=rotated?W0:H0; W=W1; H=H1;
     const maxScale=Math.min(300/72,4000/Math.max(W1,H1),Math.sqrt(40e6/(W1*H1)));
     if(!scale){
-      const gh=Raster.glyphHeight(Raster.gray(pcFix));
+      const gh=Raster.glyphHeight(Raster.gray(scoreInfo?Score.mask(pcFix,scoreInfo.rects,sp):pcFix));
       scale=gh?U.clamp(sp*GLYPH_TARGET/gh,1.0,maxScale):maxScale;
       glyphPx=gh?gh*scale/sp:0;
       if(Math.abs(scale-sp)/sp<0.12){ scale=sp; canvas=pcFix; }
@@ -1416,6 +1664,12 @@ const Analyze={
     if(!canvas){
       let full=await renderAt(scale);
       canvas=(quarter||skew)?transformCanvas(full,quarter,skew):full;
+      if(scoreAngle) canvas=transformCanvas(canvas,0,scoreAngle);
+    }
+    let scoreFigs=[];
+    if(scoreInfo){
+      scoreFigs=Score.figures(canvas,scoreInfo.rects,scale,opt&&opt.pageNo);
+      canvas=Score.mask(canvas,scoreInfo.rects,scale);
     }
     // fasce con inclinazione propria (tabelle storte, ciascuna a modo suo)
     const gG=Raster.gray(canvas);
@@ -1441,9 +1695,10 @@ const Analyze={
       }
       res={items:[].concat(...parts.map(p=>p.items)),tables:[].concat(...parts.map(p=>p.tables)),figures:[].concat(...parts.map(p=>p.figures))};
     } else res=await this._rasterCore(canvas,scale,glyphPx,ocr,opt);
-    const {items,tables,figures}=res;
+    const {items,tables}=res; const figures=res.figures.concat(scoreFigs);
     const model=this.buildModel({W,H,items,tables,figures,fills:null,mode:'raster',scale,canvas,assignItems:false});
     model.ocr=true;
+    if(scoreFigs.length){ model.score=true; model.scoreSystems=scoreFigs.length; }
     return model;
   }
 };
@@ -1465,7 +1720,8 @@ const Layout={
       top:U.clamp(toMm(minY0),6,25),bottom:U.clamp(toMm(H-maxY1),8,25)};
     const cwPx=(pw-mm.left-mm.right)*MM2PX, chPx=(ph-mm.top-mm.bottom)*MM2PX;
     const bw=Math.max(1,maxX1-minX0), bh=Math.max(1,maxY1-minY0);
-    const K=Math.min(K0*1.25,cwPx/bw,chPx/bh)*0.985;
+    // negli spartiti il testo attorno (titolo, note a fondo pagina) occupa piu' righe dell'originale: un po' di margine
+    const K=Math.min(K0*1.25,cwPx/bw,chPx/bh)*(models.some(m=>m.score)?0.94:0.985);
     const bodies=models.map(m=>m.bodySize).filter(Boolean);
     return {K,mm,minX0,minY0,maxX1,maxY1,bodySize:U.med(bodies)||10,
       contentWpx:cwPx,contentHpx:chPx,pageMm:[pw,ph],factor:K/PT2PX};
@@ -1481,7 +1737,7 @@ const Layout={
     const leftOf=(a,b)=>a.x1<=b.x0+0.12*Math.min(a.x1-a.x0,b.x1-b.x0)+2;
     for(let i=0;i<blocks.length;i++){
       const f=blocks[i]; if(f.type!=='figure') continue;
-      if(f.float) continue;
+      if(f.float||f.score) continue;
       const hgt=f.y1-f.y0, nx=blocks[i+1];
       if(nx && !nx.float && ov(f,nx)>0.4*Math.min(hgt,nx.y1-nx.y0) && leftOf(f,nx)) { f.float='left'; continue; }
       // figura a destra di blocchi già emessi: si anticipa prima del PRIMO blocco
@@ -1540,14 +1796,15 @@ const Layout={
     if(clear) st+=clear;
     return {html:'<'+tag+' data-bb-src="pdf" style="'+st+'">'+inner+'</'+tag+'>',bottom:top+p.nLines*pitch};
   },
+  esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); },
   figure(f,L,prevBottom,model){
     const K=L.K, mt=Math.max(0,Math.min(f.y0-prevBottom,400))*K, ml=Math.max(0,(f.x0-L.minX0)*K);
     const w=(f.x1-f.x0)*K, h=(f.y1-f.y0)*K;
     if(f.float){
       const side=f.float, mrg=side==='left'?this.px(mt)+' 0 0 '+this.px(ml):this.px(mt)+' '+this.px(Math.max(0,(L.maxX1-f.x1)*K))+' 0 0';
-      return '<p data-bb-src="pdf" style="margin:0;height:0;line-height:0"><img data-bb-extract="image" src="'+f.dataUrl+'" alt="Figura" style="float:'+side+';margin:'+mrg+';width:'+this.px(w)+';height:'+this.px(h)+'"></p>';
+      return '<p data-bb-src="pdf" style="margin:0;height:0;line-height:0"><img data-bb-extract="image" src="'+f.dataUrl+'" alt="'+this.esc(f.alt||'Figura')+'" style="float:'+side+';margin:'+mrg+';width:'+this.px(w)+';height:'+this.px(h)+'"></p>';
     }
-    return '<p data-bb-src="pdf" style="margin:'+this.px(mt)+' 0 0 '+this.px(ml)+';line-height:0"><img data-bb-extract="image" src="'+f.dataUrl+'" alt="Figura" style="width:'+this.px(w)+';height:'+this.px(h)+'"></p>';
+    return '<p data-bb-src="pdf" style="margin:'+this.px(mt)+' 0 0 '+this.px(ml)+';line-height:0"><img data-bb-extract="image" src="'+f.dataUrl+'" alt="'+this.esc(f.alt||'Figura')+'" style="width:'+this.px(w)+';height:'+this.px(h)+'"></p>';
   },
   table(t,L,prevBottom,model,clear){
     const K=L.K;
@@ -1645,5 +1902,5 @@ const OcrPool={
   }
 };
 
-root.PdfEngine={Analyze,Layout,OcrPool,Raster,Geo,Vector,U,keepWord,transformCanvas,textSanity,PT2MM,MM2PX};
+root.PdfEngine={Analyze,Layout,OcrPool,Raster,Geo,Vector,Score,U,keepWord,transformCanvas,textSanity,PT2MM,MM2PX};
 })(typeof window!=='undefined'?window:globalThis);

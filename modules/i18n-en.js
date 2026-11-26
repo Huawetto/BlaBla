@@ -122,7 +122,7 @@ const R=[
 [/^Usare il modello «(.*)»\?$/,'Use the template “$1”?'],[/^Prima del modello «(.*)»$/,'Before template “$1”'],[/^Prima di aprire (.*)$/,'Before opening $1'],
 [/^È disponibile BlaBla (.*) — apri «Aggiornamenti» per i dettagli$/,'BlaBla $1 is available — open “Updates” for details'],[/^È disponibile BlaBla (.*) \(hai la (.*)\)\.$/,'BlaBla $1 is available (you have $2).'],
 [/^Hai già l'ultima versione \((.*)\)\.$/,'You already have the latest version ($1).'],[/^Versione installata: (.*)$/,'Installed version: $1'],
-[/^(\d+) pagine importate(.*)$/,(m,n,r)=>n+' pages imported'+r.replace(' con testo diretto',' with direct text').replace(' via OCR (nessun testo incorporato)',' via OCR (no embedded text)')],
+[/^(\d+) pagine importate(.*)$/,(m,n,r)=>n+' pages imported'+r.replace(' con testo diretto',' with direct text').replace(' via OCR (nessun testo incorporato)',' via OCR (no embedded text)').replace(/ (\d+) tabelle/g,' $1 tables').replace(/ (\d+) figure/g,' $1 figures').replace(/ (\d+) sistemi musicali \(spartito\) come immagini/g,' $1 music systems (sheet music) as images')],
 [/^Figura (\d+): (.*)$/,'Figure $1: $2'],[/^Tabella (\d+): (.*)$/,'Table $1: $2'],[/^OCR pagina (\d+)(.*)$/,'OCR page $1$2'],[/^Analisi pagina (\d+)(.*)$/,'Analyzing page $1$2'],
 [/^(\d+) minut[oi] fa$/,(m,n)=>n+(n==='1'?' minute ago':' minutes ago')],[/^(\d+) or[ae] fa$/,(m,n)=>n+(n==='1'?' hour ago':' hours ago')],[/^adesso$/,'now']
 ];
